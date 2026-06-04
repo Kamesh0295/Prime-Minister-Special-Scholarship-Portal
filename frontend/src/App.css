@@ -1,0 +1,15 @@
+/* App.css — PMSS overrides (most styles are in index.css) */
+
+/* Ensure content starts below the navbar */
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Print styles for approval letter */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
