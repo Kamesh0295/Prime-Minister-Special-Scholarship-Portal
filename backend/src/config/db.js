@@ -55,19 +55,14 @@ const getMongoUri = () => {
 
 const connectDB = async () => {
   try {
-    const mongoUri = getMongoUri();
-    if (!mongoUri) {
-      throw new Error('MongoDB connection string is missing. Set MONGO_URI, MONGODB_URI, or DATABASE_URL in the deployment environment.');
-    }
+    console.log("Connecting to MongoDB...");
+    console.log("MONGO_URI exists:", !!process.env.MONGO_URI);
 
-    console.log('Connecting to MongoDB...');
-    console.log('MONGO_URI exists:', !!mongoUri);
-
-    const sanitizedUri = sanitizeMongoUri(mongoUri);
-    const conn = await mongoose.connect(sanitizedUri, {
+    const conn = await mongoose.connect(sanitizeMongoUri(getMongoUri()), {
       serverSelectionTimeoutMS: 30000,
       connectTimeoutMS: 30000,
     });
+
     console.log(`MongoDB Connected: ${conn.connection.host}`);
 
     // Ensure all existing models are registered
@@ -317,10 +312,11 @@ const connectDB = async () => {
 
     return conn;
   } catch (error) {
-    console.error('MongoDB Connection Error:');
+    console.error("========== MONGODB ERROR ==========");
     console.error(error);
-    console.error('If this is MongoDB Atlas, check Network Access / IP whitelist and confirm the Render service can reach the cluster.');
-    console.error('Also verify the connection string, username, password, and database name in the deployment environment.');
+    console.error("Name:", error.name);
+    console.error("Message:", error.message);
+    console.error("Stack:", error.stack);
     process.exit(1);
   }
 };
