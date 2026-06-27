@@ -1,69 +1,43 @@
+require('dotenv').config();
+
 const mongoose = require('mongoose');
 const path = require('path');
 const fs = require('fs');
 const bcrypt = require('bcryptjs');
 const dns = require('dns');
 
-// Configure custom DNS servers only when explicitly enabled.
-// Some deployment environments resolve Atlas SRV records more reliably with their own DNS.
-if (process.env.USE_CUSTOM_DNS === 'true') {
-  try {
-    dns.setServers(['1.1.1.1', '8.8.8.8']);
-  } catch (dnsErr) {
-    console.warn('Failed to set custom DNS servers, using system default:', dnsErr.message);
-  }
+try {
+  dns.setServers(['1.1.1.1', '8.8.8.8']);
+} catch (dnsErr) {
+  console.warn('Failed to set custom DNS servers, using system default:', dnsErr.message);
 }
-
-const sanitizeMongoUri = (uri) => {
-  if (!uri) return uri;
-  try {
-    const protocolMatch = uri.match(/^(mongodb(?:\+srv)?:\/\/)(.*)$/);
-    if (!protocolMatch) return uri;
-    const protocol = protocolMatch[1];
-    const rest = protocolMatch[2];
-    const lastAtIdx = rest.lastIndexOf('@');
-    if (lastAtIdx === -1) return uri;
-    
-    const creds = rest.substring(0, lastAtIdx);
-    const hostDb = rest.substring(lastAtIdx + 1);
-    
-    const colonIdx = creds.indexOf(':');
-    if (colonIdx === -1) {
-      return protocol + encodeURIComponent(decodeURIComponent(creds)) + '@' + hostDb;
-    }
-    
-    const username = creds.substring(0, colonIdx);
-    const password = creds.substring(colonIdx + 1);
-    
-    const safeUsername = encodeURIComponent(decodeURIComponent(username));
-    const safePassword = encodeURIComponent(decodeURIComponent(password));
-    
-    return protocol + safeUsername + ':' + safePassword + '@' + hostDb;
-  } catch (err) {
-    return uri;
-  }
-};
-
-const getMongoUri = () => {
-  return (
-    process.env.MONGO_URI ||
-    process.env.MONGODB_URI ||
-    process.env.DATABASE_URL ||
-    ''
-  );
-};
 
 const connectDB = async () => {
   try {
     console.log("Connecting to MongoDB...");
     console.log("MONGO_URI exists:", !!process.env.MONGO_URI);
+    console.log("MONGO_URI first 25 chars:", process.env.MONGO_URI ? process.env.MONGO_URI.slice(0, 25) : '');
+    console.log("MONGO_URI host:", process.env.MONGO_URI ? new URL(process.env.MONGO_URI).host : '');
 
-    const conn = await mongoose.connect(sanitizeMongoUri(getMongoUri()), {
-      serverSelectionTimeoutMS: 30000,
-      connectTimeoutMS: 30000,
-    });
+    if (!process.env.MONGO_URI) {
+      throw new Error('MONGO_URI is not defined');
+    }
+
+    if (!process.env.MONGO_URI.startsWith('mongodb+srv://')) {
+      throw new Error('MONGO_URI must begin with mongodb+srv://');
+    }
+
+    if (
+      process.env.MONGO_URI.includes('mongodb://127.0.0.1') ||
+      process.env.MONGO_URI.includes('mongodb://localhost')
+    ) {
+      throw new Error('MONGO_URI must not contain localhost MongoDB connection strings');
+    }
+
+    const conn = await mongoose.connect(process.env.MONGO_URI);
 
     console.log(`MongoDB Connected: ${conn.connection.host}`);
+    console.log(`Connected database name: ${conn.connection.name}`);
 
     // Ensure all existing models are registered
     const modelsDir = path.join(__dirname, '../models');
