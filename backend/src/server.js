@@ -21,20 +21,44 @@ const chatbotRoutes = require('./routes/chatbot');
 
 const app = express();
 
+const getAllowedOrigins = () => {
+  const configuredOrigins = [process.env.FRONTEND_URL, process.env.CORS_ORIGINS, process.env.CORS_ORIGIN]
+    .filter(Boolean)
+    .flatMap((value) => value.split(','))
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  return [...new Set([
+    'http://localhost:5173',
+    ...configuredOrigins,
+  ])];
+};
+
 // Middleware
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (mobile apps, Postman) and any localhost in dev
-      const allowed = [
-        process.env.FRONTEND_URL || 'http://localhost:5173',
-        'http://localhost:5173',
-        'http://localhost:5174',
-        'http://localhost:5175',
-        'http://127.0.0.1:5173',
-        'http://127.0.0.1:5174',
-      ];
-      if (!origin || allowed.includes(origin)) {
+      // Allow requests with no origin (mobile apps, Postman), any localhost port in dev,
+      // and configured production frontend origins.
+      const allowedOrigins = getAllowedOrigins();
+
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      try {
+        const parsedOrigin = new URL(origin);
+        const isLocalhost = parsedOrigin.hostname === 'localhost' || parsedOrigin.hostname === '127.0.0.1';
+        if (allowedOrigins.includes(origin) || isLocalhost) {
+          callback(null, true);
+          return;
+        }
+      } catch (error) {
+        // Fall through to the explicit rejection below.
+      }
+
+      if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
         callback(new Error(`CORS policy blocked: ${origin}`));

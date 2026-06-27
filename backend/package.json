@@ -1,5 +1,5 @@
 {
-  "name": "anti-gravity-backend",
+  "name": "pmss-backend",
   "version": "1.0.0",
   "description": "Backend server for Anti-Gravity Research & Simulation Platform",
   "main": "src/server.js",

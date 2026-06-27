@@ -83,6 +83,10 @@ EMAIL_FROM=noreply@pmss.gov.in
 FRONTEND_URL=http://localhost:5173
 ```
 
+For deployments such as Render, set the same MongoDB connection string in the service environment as `MONGO_URI`, `MONGODB_URI`, or `DATABASE_URL`. Do not point the production service at `mongodb://127.0.0.1:27017`, because that will try to connect to the Render container itself.
+
+If your frontend origin changes in production, set `CORS_ORIGINS` to a comma-separated list of allowed origins, for example `https://your-frontend.onrender.com,https://www.yoursite.com`.
+
 ### 3. Start Backend
 
 ```bash

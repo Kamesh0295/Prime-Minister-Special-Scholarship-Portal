@@ -41,11 +41,20 @@ const sanitizeMongoUri = (uri) => {
   }
 };
 
+const getMongoUri = () => {
+  return (
+    process.env.MONGO_URI ||
+    process.env.MONGODB_URI ||
+    process.env.DATABASE_URL ||
+    ''
+  );
+};
+
 const connectDB = async () => {
   try {
-    const mongoUri = process.env.MONGO_URI;
+    const mongoUri = getMongoUri();
     if (!mongoUri) {
-      throw new Error('MONGO_URI is not defined in process.env');
+      throw new Error('MongoDB connection string is missing. Set MONGO_URI, MONGODB_URI, or DATABASE_URL in the deployment environment.');
     }
 
     const sanitizedUri = sanitizeMongoUri(mongoUri);
