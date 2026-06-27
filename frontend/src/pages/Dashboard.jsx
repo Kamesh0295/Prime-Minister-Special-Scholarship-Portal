@@ -7,7 +7,7 @@ import StatusBadge from '../components/ui/StatusBadge';
 import { SkeletonCard } from '../components/ui/SkeletonLoader';
 import { showError, showSuccess, showInfo } from '../store/slices/toastSlice';
 import { applicationSuccess } from '../store/slices/applicationSlice';
-import { getApplication } from '../services/studentService';
+import { getApplication, getProfile } from '../services/studentService';
 import { useTranslation } from '../context/LanguageContext';
 import {
   FileText,
@@ -20,24 +20,20 @@ import {
   CheckCircle,
   AlertCircle,
   ArrowRight,
-  Sparkles,
-  MessageSquare,
-  X,
-  Send,
   Loader2,
   BookmarkCheck,
   CheckSquare,
   ShieldCheck,
-  Globe
+  Sparkles
 } from 'lucide-react';
 
 const STATUS_STEPS = ['submitted', 'institution_verified', 'under_review', 'approved', 'disbursed'];
 const STEP_LABELS = {
   submitted: 'Submitted',
-  institution_verified: 'College Verified',
-  under_review: 'Under Review',
+  institution_verified: 'Verification',
+  under_review: 'Review',
   approved: 'Approved',
-  disbursed: 'Disbursed',
+  disbursed: 'Released',
 };
 
 const Dashboard = () => {
@@ -50,6 +46,9 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
 
+  // Profile state
+  const [profile, setProfile] = useState(null);
+
   // Notifications state
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -58,14 +57,7 @@ const Dashboard = () => {
   const [recommendations, setRecommendations] = useState([]);
   const [recsLoading, setRecsLoading] = useState(false);
 
-  // Chatbot state
-  const [chatOpen, setChatOpen] = useState(false);
-  const [chatMessages, setChatMessages] = useState([
-    { sender: 'bot', text: 'Hello! I am your PMSS Virtual Assistant. How can I help you today?' }
-  ]);
-  const [chatInput, setChatInput] = useState('');
-  const [chatLang, setChatLang] = useState('en');
-  const [chatLoading, setChatLoading] = useState(false);
+  // Chatbot state has been removed (migrated to global ChatbotWidget)
 
   const fetchApp = async () => {
     try {
@@ -110,9 +102,21 @@ const Dashboard = () => {
     }
   };
 
+  const fetchProfile = async () => {
+    try {
+      const res = await getProfile();
+      if (res.data.success && res.data.data) {
+        setProfile(res.data.data);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   useEffect(() => {
     if (token) {
       fetchApp();
+      fetchProfile();
       fetchNotifications();
       fetchRecommendations();
     }
@@ -152,30 +156,7 @@ const Dashboard = () => {
     }
   };
 
-  const handleSendChat = async (textToSend) => {
-    const msg = textToSend || chatInput;
-    if (!msg.trim()) return;
-
-    const userMsg = { sender: 'user', text: msg };
-    setChatMessages((prev) => [...prev, userMsg]);
-    setChatInput('');
-    setChatLoading(true);
-
-    try {
-      const res = await axios.post(
-        'http://localhost:5000/api/ai/chat',
-        { message: msg, language: chatLang },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      if (res.data.success) {
-        setChatMessages((prev) => [...prev, { sender: 'bot', text: res.data.data.reply }]);
-      }
-    } catch (err) {
-      setChatMessages((prev) => [...prev, { sender: 'bot', text: 'Sorry, I am facing connectivity issues. Please try again.' }]);
-    } finally {
-      setChatLoading(false);
-    }
-  };
+  // handleSendChat has been removed (migrated to global ChatbotWidget)
 
   const getProfilePercent = () => {
     if (!application) return 0;
@@ -290,35 +271,42 @@ const Dashboard = () => {
 
                   {/* Horizontal Timeline */}
                   {!isRejected && (
-                    <div className="flex flex-col sm:flex-row items-center justify-between gap-6 py-4 overflow-x-auto">
-                      {STATUS_STEPS.map((s, i) => {
-                        const currentIdx = STATUS_STEPS.indexOf(appStatus);
-                        const isDone = i <= currentIdx;
-                        const isActive = i === currentIdx;
+                    <div className="relative py-4 select-none">
+                      {/* Background Connector Bar */}
+                      <div className="absolute top-8 left-[6%] right-[6%] h-[3px] bg-slate-100 rounded-full z-0 hidden sm:block" />
+                      
+                      {/* Foreground Progress Bar */}
+                      <div
+                        className="absolute top-8 left-[6%] h-[3px] bg-blue-600 rounded-full z-0 transition-all duration-500 hidden sm:block"
+                        style={{
+                          width: `${Math.max(0, (STATUS_STEPS.indexOf(appStatus) / (STATUS_STEPS.length - 1)) * 88)}%`
+                        }}
+                      />
 
-                        return (
-                          <React.Fragment key={s}>
-                            <div className="flex flex-col items-center gap-2 relative shrink-0">
-                              <div className={`h-9 w-9 rounded-full flex items-center justify-center border-2 text-xs font-bold transition-all shadow-sm ${
-                                isDone ? 'bg-blue-600 border-blue-600 text-white' :
-                                'border-slate-200 text-slate-400 bg-white'
+                      <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between gap-6 sm:gap-2">
+                        {STATUS_STEPS.map((s, i) => {
+                          const currentIdx = STATUS_STEPS.indexOf(appStatus);
+                          const isDone = i <= currentIdx;
+                          const isActive = i === currentIdx;
+
+                          return (
+                            <div key={s} className="flex flex-col items-center gap-2.5 relative shrink-0">
+                              <div className={`h-9 w-9 rounded-full flex items-center justify-center border-2 text-xs font-bold transition-all duration-300 shadow-sm ${
+                                isDone
+                                  ? 'bg-blue-600 border-blue-600 text-white'
+                                  : 'border-slate-200 text-slate-400 bg-white'
                               }`}>
                                 {isDone ? <CheckCircle className="w-4 h-4" /> : i + 1}
                               </div>
-                              <span className={`text-[10px] font-bold text-center leading-tight max-w-[65px] ${
-                                isActive ? 'text-blue-600' : isDone ? 'text-slate-700' : 'text-slate-400'
+                              <span className={`text-[10px] font-black text-center uppercase tracking-wider leading-tight max-w-[85px] ${
+                                isActive ? 'text-blue-600' : isDone ? 'text-slate-800' : 'text-slate-400'
                               }`}>
                                 {STEP_LABELS[s]}
                               </span>
                             </div>
-                            {i < STATUS_STEPS.length - 1 && (
-                              <div className={`hidden sm:block flex-1 h-0.5 -mt-6 mx-2 min-w-[30px] ${
-                                i < currentIdx ? 'bg-blue-600' : 'bg-slate-200'
-                              }`} />
-                            )}
-                          </React.Fragment>
-                        );
-                      })}
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
 
@@ -385,17 +373,16 @@ const Dashboard = () => {
           <div className="lg:col-span-4 space-y-6">
             
             {/* Completion card */}
-            {application && (
-              <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-3">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">{t('profileCompletion')}</h3>
-                  <span className="text-xs font-black text-blue-600">{profilePercent}%</span>
-                </div>
-                <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                  <div className="bg-blue-600 h-full rounded-full transition-all" style={{ width: `${profilePercent}%` }}></div>
-                </div>
+            <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm space-y-3">
+              <div className="flex justify-between items-center">
+                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">{t('profileCompletion')}</h3>
+                <span className="text-xs font-black text-blue-600">{profile?.completionPercentage || 0}%</span>
               </div>
-            )}
+              <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                <div className="bg-blue-600 h-full rounded-full transition-all duration-500" style={{ width: `${profile?.completionPercentage || 0}%` }}></div>
+              </div>
+              <p className="text-[10px] text-slate-400">Complete your profile to at least 80% to submit your scholarship application.</p>
+            </div>
 
             {/* Notifications Drawer Card */}
             <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col max-h-[350px]">
@@ -450,114 +437,7 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Floating Chatbot Assistant Widget */}
-        <div className="fixed bottom-6 right-6 z-50">
-          {!chatOpen ? (
-            <button
-              onClick={() => setChatOpen(true)}
-              className="h-12 w-12 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex items-center justify-center shadow-2xl transition hover:scale-105 active:scale-95"
-            >
-              <MessageSquare className="w-6 h-6" />
-            </button>
-          ) : (
-            <div className="w-80 h-96 bg-white dark:bg-slate-850 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl overflow-hidden flex flex-col">
-              
-              {/* Chat Header */}
-              <div className="bg-blue-600 text-white p-3.5 flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-blue-200" />
-                  <span className="font-bold text-xs tracking-wide">PMSS Virtual Assistant</span>
-                </div>
-                
-                <div className="flex items-center gap-1.5">
-                  {/* Language Selector */}
-                  <Globe className="w-3.5 h-3.5 text-blue-200" />
-                  <select
-                    value={chatLang}
-                    onChange={(e) => setChatLang(e.target.value)}
-                    className="bg-blue-700 text-[10px] text-white font-bold outline-none rounded border border-blue-500 py-0.5 px-1 cursor-pointer"
-                  >
-                    <option value="en">EN</option>
-                    <option value="hi">HI</option>
-                    <option value="ta">TA</option>
-                  </select>
-                  <button onClick={() => setChatOpen(false)} className="p-1 hover:bg-blue-700 rounded transition">
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Chat history */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-3 text-xs bg-slate-50/50">
-                {chatMessages.map((m, idx) => (
-                  <div key={idx} className={`flex ${m.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`p-3 rounded-2xl max-w-[80%] leading-relaxed ${
-                      m.sender === 'user' ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white border text-slate-700 rounded-tl-none shadow-sm'
-                    }`}>
-                      {m.text.split('\n').map((line, i) => (
-                        <p key={i} className={i > 0 ? 'mt-1' : ''}>{line}</p>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-                {chatLoading && (
-                  <div className="flex justify-start">
-                    <div className="p-3 bg-white border rounded-2xl rounded-tl-none flex items-center gap-1 shadow-sm">
-                      <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"></div>
-                      <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-100"></div>
-                      <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-200"></div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Suggestions chips */}
-              <div className="px-3 py-1.5 border-t bg-white flex gap-1.5 overflow-x-auto whitespace-nowrap scrollbar-none">
-                <button
-                  onClick={() => handleSendChat('What is the income limit?')}
-                  className="px-2 py-0.5 border border-slate-200 hover:bg-slate-50 text-[9px] font-bold text-slate-600 rounded-full transition"
-                >
-                  Income Limit?
-                </button>
-                <button
-                  onClick={() => handleSendChat('Which documents do I need?')}
-                  className="px-2 py-0.5 border border-slate-200 hover:bg-slate-50 text-[9px] font-bold text-slate-600 rounded-full transition"
-                >
-                  Required Docs?
-                </button>
-                <button
-                  onClick={() => handleSendChat('Who is eligible?')}
-                  className="px-2 py-0.5 border border-slate-200 hover:bg-slate-50 text-[9px] font-bold text-slate-600 rounded-full transition"
-                >
-                  Eligibility?
-                </button>
-              </div>
-
-              {/* Chat Input */}
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handleSendChat();
-                }}
-                className="p-2 border-t bg-white flex gap-2"
-              >
-                <input
-                  type="text"
-                  placeholder="Ask a scholarship query..."
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  className="flex-1 text-xs px-3 py-2 bg-slate-50 border rounded-xl outline-none focus:border-blue-500 transition"
-                />
-                <button
-                  type="submit"
-                  className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition shadow flex items-center justify-center shrink-0"
-                >
-                  <Send className="w-4 h-4" />
-                </button>
-              </form>
-            </div>
-          )}
-        </div>
+        {/* Floating Chatbot Assistant Widget has been removed (migrated to global ChatbotWidget inside DashboardLayout) */}
       </div>
     </DashboardLayout>
   );

@@ -7,6 +7,7 @@ import { SkeletonCard } from '../components/ui/SkeletonLoader';
 import { showError } from '../store/slices/toastSlice';
 import { applicationSuccess } from '../store/slices/applicationSlice';
 import { getApplication, downloadApprovalLetter } from '../services/studentService';
+import { generateApplicationPDF } from '../utils/pdfGenerator';
 import {
   CheckCircle,
   Clock,
@@ -20,17 +21,28 @@ import {
 } from 'lucide-react';
 
 const TIMELINE = [
-  { status: 'submitted',    label: 'Submitted',    desc: 'Your application has been received.' },
-  { status: 'under_review', label: 'Under Review', desc: 'Our team is reviewing your application and documents.' },
-  { status: 'verified',     label: 'Verified',     desc: 'Your documents have been verified.' },
-  { status: 'approved',     label: 'Approved',     desc: 'Congratulations! Your scholarship has been approved.' },
+  { status: 'submitted',            label: 'Submitted',    desc: 'Your application has been successfully submitted.' },
+  { status: 'institution_verified',  label: 'Verification', desc: 'Your college or institution has verified your registration and details.' },
+  { status: 'under_review',          label: 'Review',       desc: 'State and nodal officers are reviewing your application.' },
+  { status: 'approved',              label: 'Approved',     desc: 'Congratulations! Your scholarship application has been officially approved.' },
+  { status: 'disbursed',             label: 'Released',     desc: 'Scholarship funds have been disbursed to your Aadhar-seeded bank account.' },
 ];
 
 const ApplicationStatus = () => {
   const dispatch = useDispatch();
   const { application } = useSelector((s) => s.application);
+  const { user } = useSelector((s) => s.auth);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
+
+  const handleDownloadAppPDF = () => {
+    try {
+      if (!application) return;
+      generateApplicationPDF(application, user);
+    } catch (err) {
+      dispatch(showError(err.message || 'Failed to generate PDF.'));
+    }
+  };
 
   useEffect(() => {
     const fetchApp = async () => {
@@ -114,6 +126,18 @@ const ApplicationStatus = () => {
                     </p>
                   </div>
                 )}
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                <span className="text-xs text-slate-500 font-medium">Export application copy:</span>
+                <button
+                  onClick={handleDownloadAppPDF}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition shadow"
+                  id="download-application-pdf-btn"
+                >
+                  <FileText className="h-4 w-4" />
+                  Download Application PDF
+                </button>
               </div>
 
               {isApproved && (

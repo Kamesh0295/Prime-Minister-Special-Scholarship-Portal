@@ -122,17 +122,19 @@ const generateApprovalLetter = (res, application, student) => {
     ['Status', 'Approved & Forwarded for Disbursement'],
   ];
 
-  doc.rect(60, doc.y, 475, 140).fillColor('#f8fafc').fill();
-  doc.strokeColor('#e2e8f0').lineWidth(1).rect(60, doc.y - 140, 475, 140).stroke();
+  const tableStartY = doc.y;
+  const tableHeight = 140;
+  doc.rect(60, tableStartY, 475, tableHeight).fillColor('#f8fafc').fill();
+  doc.strokeColor('#e2e8f0').lineWidth(1).rect(60, tableStartY, 475, tableHeight).stroke();
 
-  let currentY = doc.y - 130;
+  let currentY = tableStartY + 10;
   details.forEach(([key, val]) => {
     doc.fillColor('#475569').font('Helvetica-Bold').fontSize(9.5).text(key, 75, currentY);
     doc.fillColor('#0f172a').font('Helvetica').text(`:  ${val}`, 230, currentY);
     currentY += 18;
   });
 
-  doc.y = currentY + 10;
+  doc.y = tableStartY + tableHeight + 15;
   doc.font('Helvetica').fontSize(10).text(
     'Please verify that your bank account details (Aadhaar Seeded status) remain active. The scholarship funds will be credited directly to your bank account via PFMS.',
     { lineGap: 3 }
@@ -203,18 +205,20 @@ const generateRejectionLetter = (res, application, student) => {
   doc.moveDown(1);
 
   // Reason Box
-  doc.rect(60, doc.y, 475, 70).fillColor('#fef2f2').fill();
-  doc.strokeColor('#fee2e2').lineWidth(1).rect(60, doc.y - 70, 475, 70).stroke();
+  const reasonBoxStartY = doc.y;
+  const reasonBoxHeight = 70;
+  doc.rect(60, reasonBoxStartY, 475, reasonBoxHeight).fillColor('#fef2f2').fill();
+  doc.strokeColor('#fee2e2').lineWidth(1).rect(60, reasonBoxStartY, 475, reasonBoxHeight).stroke();
 
-  doc.fillColor('#991b1b').font('Helvetica-Bold').fontSize(10).text('Reason for Rejection:', 75, doc.y - 55);
+  doc.fillColor('#991b1b').font('Helvetica-Bold').fontSize(10).text('Reason for Rejection:', 75, reasonBoxStartY + 15);
   doc.fillColor('#0f172a').font('Helvetica').fontSize(9.5).text(
     application.reviewerRemarks || 'The application did not satisfy the scheme eligibility guidelines or contained unverified/mismatched documents.',
     75,
-    doc.y - 40,
+    reasonBoxStartY + 30,
     { width: 440 }
   );
 
-  doc.y = doc.y + 20;
+  doc.y = reasonBoxStartY + reasonBoxHeight + 20;
   doc.font('Helvetica').fontSize(10).text(
     'As per the PMSS guidelines, students whose applications are rejected are ineligible for funding during this academic cycle. For further queries, you may write to the Grievance Officer at helpdesk@pmss.gov.in.',
     { lineGap: 3 }
@@ -280,18 +284,20 @@ const generateRevisionLetter = (res, application, student) => {
   doc.moveDown(1);
 
   // Correction remarks box
-  doc.rect(60, doc.y, 475, 75).fillColor('#fff7ed').fill();
-  doc.strokeColor('#ffedd5').lineWidth(1).rect(60, doc.y - 75, 475, 75).stroke();
+  const revisionBoxStartY = doc.y;
+  const revisionBoxHeight = 75;
+  doc.rect(60, revisionBoxStartY, 475, revisionBoxHeight).fillColor('#fff7ed').fill();
+  doc.strokeColor('#ffedd5').lineWidth(1).rect(60, revisionBoxStartY, 475, revisionBoxHeight).stroke();
 
-  doc.fillColor('#c2410c').font('Helvetica-Bold').fontSize(10).text('Action Required & Remarks:', 75, doc.y - 60);
+  doc.fillColor('#c2410c').font('Helvetica-Bold').fontSize(10).text('Action Required & Remarks:', 75, revisionBoxStartY + 15);
   doc.fillColor('#0f172a').font('Helvetica').fontSize(9.5).text(
     application.reviewerRemarks || 'Please review your uploaded documents and details.',
     75,
-    doc.y - 45,
+    revisionBoxStartY + 30,
     { width: 440 }
   );
 
-  doc.y = doc.y + 20;
+  doc.y = revisionBoxStartY + revisionBoxHeight + 20;
   doc.font('Helvetica').fontSize(10).text(
     'Please log in to your student dashboard, navigate to your application form, correct the specified details or upload legible documents, and re-submit your application for evaluation.',
     { lineGap: 3 }

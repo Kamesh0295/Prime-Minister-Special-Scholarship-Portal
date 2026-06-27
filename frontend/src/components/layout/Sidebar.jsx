@@ -6,6 +6,7 @@ import {
   Clock,
   Download,
   Users,
+  User,
   BarChart2,
   BookOpen,
   ChevronLeft,
@@ -15,6 +16,7 @@ import { useSelector } from 'react-redux';
 
 const StudentLinks = [
   { to: '/dashboard',              icon: LayoutDashboard, label: 'Dashboard'   },
+  { to: '/dashboard/profile',      icon: User,            label: 'My Profile'  },
   { to: '/dashboard/application',  icon: FileText,        label: 'Application' },
   { to: '/dashboard/status',       icon: Clock,           label: 'Track Status'},
 ];
@@ -22,6 +24,7 @@ const StudentLinks = [
 const AdminLinks = [
   { to: '/admin',                  icon: LayoutDashboard, label: 'Dashboard'   },
   { to: '/admin/applications',     icon: FileText,        label: 'Applications'},
+  { to: '/admin/profiles',         icon: Users,           label: 'Profiles'    },
   { to: '/admin/reports',          icon: BarChart2,       label: 'Reports'     },
   { to: '/admin/users',            icon: Users,           label: 'Users'       },
 ];

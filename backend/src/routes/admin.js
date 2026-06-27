@@ -5,6 +5,7 @@ const User = require('../models/User');
 const emailService = require('../services/email');
 const AuditLog = require('../models/AuditLog');
 const Notification = require('../models/Notification');
+const { syncAnalyticsDb } = require('../utils/syncHelper');
 
 const router = express.Router();
 
@@ -130,6 +131,8 @@ router.patch('/applications/:id/status', async (req, res) => {
 
     await application.save();
 
+    syncAnalyticsDb().catch(err => console.error('Failed to sync analytics:', err.message));
+
     // Audit Log
     await AuditLog.create({
       userId: req.user._id,
@@ -170,6 +173,74 @@ router.patch('/applications/:id/status', async (req, res) => {
     }
 
     return res.json({ success: true, message: `Application status updated to '${status}'.`, data: application });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Server error.', error: error.message });
+  }
+});
+
+// @route   PATCH /api/admin/applications/:id/documents/:docField
+// Approve, reject, and comment on individual documents
+router.patch('/applications/:id/documents/:docField', async (req, res) => {
+  try {
+    const { status, remarks } = req.body;
+    const { id, docField } = req.params;
+
+    if (!['pending', 'verified', 'rejected'].includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid document verification status.' });
+    }
+
+    const application = await Application.findById(id).populate('studentId', 'fullName email phone');
+    if (!application) {
+      return res.status(404).json({ success: false, message: 'Application not found.' });
+    }
+
+    // Update status and remarks in Map
+    application.documentStatuses.set(docField, { status, remarks: remarks || '' });
+    application.markModified('documentStatuses');
+    await application.save();
+
+    // Sync to corresponding StudentProfile if it exists
+    const StudentProfile = require('../models/StudentProfile');
+    const profile = await StudentProfile.findOne({ studentId: application.studentId._id });
+    if (profile) {
+      profile.documentStatuses.set(docField, { status, remarks: remarks || '' });
+      profile.markModified('documentStatuses');
+      await profile.save();
+    }
+
+    // Create Notification for Student
+    const friendlyDocNames = {
+      aadhaar: 'Aadhaar Card',
+      incomeCertificate: 'Income Certificate',
+      casteCertificate: 'Caste Certificate',
+      marksheet: 'Class 12 / Qualifying Marksheet',
+      bankPassbook: 'Bank Passbook / cancelled cheque',
+      bonafide: 'Bonafide College Certificate',
+      photo: 'Passport Size Photo',
+    };
+    const docName = friendlyDocNames[docField] || docField;
+    const statusLabel = status.toUpperCase();
+
+    await Notification.create({
+      recipientId: application.studentId._id,
+      title: `Document Verification: ${docName}`,
+      message: `Your document '${docName}' status is now: ${statusLabel}.${remarks ? ` Remarks: ${remarks}` : ''}`,
+      type: status === 'verified' ? 'success' : status === 'rejected' ? 'error' : 'info',
+    });
+
+    // Create Audit Log
+    await AuditLog.create({
+      userId: req.user._id,
+      action: `admin_verify_document_${docField}_${status}`,
+      ipAddress: req.ip,
+      details: { applicationId: application._id, studentId: application.studentId._id, docField, status, remarks },
+    });
+
+    return res.json({
+      success: true,
+      message: `Document '${docName}' verification updated to '${status}'.`,
+      data: application,
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Server error.', error: error.message });
   }
@@ -344,6 +415,143 @@ router.get('/applications/:id/letter', async (req, res) => {
 
     const { generateApprovalLetter } = require('../services/pdf');
     generateApprovalLetter(res, application, application.studentId);
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Server error.', error: error.message });
+  }
+});
+
+const StudentProfile = require('../models/StudentProfile');
+
+// @route   GET /api/admin/profiles
+router.get('/profiles', async (req, res) => {
+  try {
+    const { search = '', verificationStatus, deleteRequested, page = 1, limit = 10 } = req.query;
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
+    // Search match
+    let studentIds;
+    if (search) {
+      const users = await User.find({
+        $or: [
+          { fullName: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } },
+        ]
+      }).select('_id');
+      studentIds = users.map(u => u._id);
+    }
+
+    const filter = {};
+    if (studentIds) filter.studentId = { $in: studentIds };
+    if (verificationStatus) filter.verificationStatus = verificationStatus;
+    if (deleteRequested !== undefined) filter.deleteRequested = deleteRequested === 'true';
+
+    const total = await StudentProfile.countDocuments(filter);
+    const profiles = await StudentProfile.find(filter)
+      .populate('studentId', 'fullName email phone institution')
+      .sort({ updatedAt: -1 })
+      .skip(skip)
+      .limit(limitNum);
+
+    return res.json({
+      success: true,
+      message: 'Student profiles fetched.',
+      data: {
+        profiles,
+        pagination: {
+          total,
+          page: pageNum,
+          limit: limitNum,
+          totalPages: Math.ceil(total / limitNum),
+        }
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Server error.', error: error.message });
+  }
+});
+
+// @route   GET /api/admin/profiles/:id
+router.get('/profiles/:id', async (req, res) => {
+  try {
+    const profile = await StudentProfile.findById(req.params.id)
+      .populate('studentId', '-passwordHash');
+    if (!profile) {
+      return res.status(404).json({ success: false, message: 'Student profile not found.' });
+    }
+    return res.json({ success: true, message: 'Student profile fetched.', data: profile });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Server error.', error: error.message });
+  }
+});
+
+// @route   PATCH /api/admin/profiles/:id/verify
+router.patch('/profiles/:id/verify', async (req, res) => {
+  try {
+    const { status, remarks } = req.body;
+    if (!['verified', 'rejected'].includes(status)) {
+      return res.status(400).json({ success: false, message: 'Invalid verification status.' });
+    }
+    const profile = await StudentProfile.findById(req.params.id);
+    if (!profile) {
+      return res.status(404).json({ success: false, message: 'Student profile not found.' });
+    }
+    profile.verificationStatus = status;
+    profile.verificationRemarks = remarks || '';
+    profile.verifiedBy = req.user._id;
+    profile.verifiedAt = new Date();
+    await profile.save();
+
+    // Audit log
+    await AuditLog.create({
+      userId: req.user._id,
+      action: `admin_verify_profile_${status}`,
+      ipAddress: req.ip,
+      details: { profileId: profile._id, studentId: profile.studentId, remarks },
+    });
+
+    // Create Notification
+    await Notification.create({
+      recipientId: profile.studentId,
+      title: `Profile Verification: ${status === 'verified' ? 'Approved' : 'Rejected'}`,
+      message: remarks || `Your profile verification has been updated to ${status}.`,
+      type: status === 'verified' ? 'success' : 'error',
+    });
+
+    return res.json({ success: true, message: `Profile verification updated to '${status}'.`, data: profile });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Server error.', error: error.message });
+  }
+});
+
+// @route   DELETE /api/admin/profiles/:id
+router.delete('/profiles/:id', async (req, res) => {
+  try {
+    const profile = await StudentProfile.findById(req.params.id);
+    if (!profile) {
+      return res.status(404).json({ success: false, message: 'Student profile not found.' });
+    }
+    const studentId = profile.studentId;
+    await StudentProfile.findByIdAndDelete(req.params.id);
+
+    // Audit log
+    await AuditLog.create({
+      userId: req.user._id,
+      action: 'admin_delete_profile',
+      ipAddress: req.ip,
+      details: { profileId: req.params.id, studentId },
+    });
+
+    // Create Notification
+    await Notification.create({
+      recipientId: studentId,
+      title: 'Profile Deleted',
+      message: 'Your student profile has been deleted by the administrator as requested.',
+      type: 'info',
+    });
+
+    return res.json({ success: true, message: 'Student profile deleted successfully.' });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Server error.', error: error.message });
   }

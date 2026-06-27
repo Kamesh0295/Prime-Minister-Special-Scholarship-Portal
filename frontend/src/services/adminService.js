@@ -27,3 +27,15 @@ export const downloadReportCSV = () =>
 
 // Audit Logs
 export const getAuditLogs = () => API.get('/admin/logs');
+
+// Student Profiles Management
+export const getAllProfiles = (params) => API.get('/admin/profiles', { params });
+export const getProfileById = (id) => API.get(`/admin/profiles/${id}`);
+export const verifyProfile = (id, data) => API.patch(`/admin/profiles/${id}/verify`, data);
+export const deleteProfileAdmin = (id) => API.delete(`/admin/profiles/${id}`);
+
+export const updateDocumentStatus = (applicationId, docField, data) =>
+  API.patch(`/admin/applications/${applicationId}/documents/${docField}`, data);
+
+export const getAnalyticsDashboard = (params) =>
+  API.get('/admin/analytics/dashboard', { params });

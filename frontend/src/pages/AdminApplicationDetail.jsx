@@ -7,7 +7,8 @@ import StatusBadge from '../components/ui/StatusBadge';
 import Modal from '../components/ui/Modal';
 import { SkeletonCard } from '../components/ui/SkeletonLoader';
 import { showSuccess, showError } from '../store/slices/toastSlice';
-import { getApplicationById, updateApplicationStatus, downloadLetterAdmin } from '../services/adminService';
+import { getApplicationById, updateApplicationStatus, downloadLetterAdmin, updateDocumentStatus } from '../services/adminService';
+import { generateApplicationPDF } from '../utils/pdfGenerator';
 import {
   ArrowLeft, CheckCircle, XCircle, MessageSquare, Download,
   FileText, User, BookOpen, CreditCard, Paperclip, Loader2,
@@ -58,6 +59,43 @@ const AdminApplicationDetail = () => {
   const [modal, setModal] = useState({ open: false, action: '', title: '', placeholder: '' });
   const [remarkInput, setRemarkInput] = useState('');
   const [internalRemark, setInternalRemark] = useState('');
+  const [docModal, setDocModal] = useState({ open: false, field: '', remarks: '' });
+
+  const handleVerifyDocument = async (docField) => {
+    try {
+      setActionLoading(true);
+      const res = await updateDocumentStatus(id, docField, { status: 'verified', remarks: '' });
+      setApplication(res.data.data);
+      dispatch(showSuccess(`Document verified successfully.`));
+    } catch (err) {
+      dispatch(showError(err.response?.data?.message || 'Verification failed.'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleOpenRejectDocModal = (docField) => {
+    setDocModal({ open: true, field: docField, remarks: '' });
+  };
+
+  const handleRejectDocument = async () => {
+    const { field, remarks } = docModal;
+    if (!remarks.trim()) {
+      dispatch(showError('Rejection remark is required.'));
+      return;
+    }
+    try {
+      setActionLoading(true);
+      const res = await updateDocumentStatus(id, field, { status: 'rejected', remarks });
+      setApplication(res.data.data);
+      dispatch(showSuccess(`Document marked as rejected.`));
+      setDocModal({ open: false, field: '', remarks: '' });
+    } catch (err) {
+      dispatch(showError(err.response?.data?.message || 'Rejection failed.'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -136,6 +174,15 @@ const AdminApplicationDetail = () => {
     }
   };
 
+  const handleDownloadAppPDF = () => {
+    try {
+      if (!application) return;
+      generateApplicationPDF(application, application.studentId);
+    } catch (err) {
+      dispatch(showError(err.message || 'Failed to generate PDF.'));
+    }
+  };
+
   const doc = application;
   const student = doc?.studentId;
   const p = doc?.personalDetails || {};
@@ -188,16 +235,26 @@ const AdminApplicationDetail = () => {
                   <span className="text-[10px] text-slate-400 font-bold uppercase">Application Status:</span>
                   <StatusBadge status={doc.status} />
                 </div>
-                {['approved', 'disbursed'].includes(doc.status) && (
+                <div className="flex items-center gap-2">
                   <button
-                    onClick={handleDownloadLetter}
-                    disabled={downloading}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition shadow disabled:opacity-50"
+                    onClick={handleDownloadAppPDF}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition shadow"
+                    id="admin-download-application-pdf-btn"
                   >
-                    {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                    Download Award PDF
+                    <FileText className="w-4 h-4" />
+                    Download Application PDF
                   </button>
-                )}
+                  {['approved', 'disbursed'].includes(doc.status) && (
+                    <button
+                      onClick={handleDownloadLetter}
+                      disabled={downloading}
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition shadow disabled:opacity-50"
+                    >
+                      {downloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                      Download Award PDF
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Student info */}
@@ -241,21 +298,77 @@ const AdminApplicationDetail = () => {
 
               {/* Documents */}
               <SectionCard icon={Paperclip} title="Uploaded Documentation Files" iconColor="text-amber-500">
-                <div className="py-3 grid sm:grid-cols-2 gap-3">
-                  {Object.entries(docs).filter(([,v]) => v).map(([key, url]) => (
-                    <a key={key}
-                      href={`http://localhost:5000${url}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex items-center justify-between p-3 border rounded-xl hover:bg-slate-50 transition-all font-semibold text-slate-700 text-xs"
-                    >
-                      <span className="flex items-center gap-2">
-                        <FileText className="w-4 h-4 text-slate-400" />
-                        {key.replace(/([A-Z])/g, ' $1')}
-                      </span>
-                      <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                    </a>
-                  ))}
+                <div className="py-3 flex flex-col gap-4">
+                  {Object.entries(docs).filter(([,v]) => v).map(([key, url]) => {
+                    const docStatusObj = application?.documentStatuses?.[key] || { status: 'pending', remarks: '' };
+                    const docStatus = docStatusObj.status;
+                    const docRemarks = docStatusObj.remarks;
+
+                    return (
+                      <div key={key} className="flex flex-col p-4 border border-slate-100 rounded-2xl bg-white shadow-sm space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="h-9 w-9 bg-slate-100 rounded-xl flex items-center justify-center text-slate-500">
+                              <FileText className="h-5 w-5" />
+                            </div>
+                            <div>
+                              <span className="text-xs font-bold text-slate-800 capitalize tracking-wide block">
+                                {key.replace(/([A-Z])/g, ' $1')}
+                              </span>
+                              <span className={`inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wide border ${
+                                docStatus === 'verified'
+                                  ? 'bg-green-50 text-green-700 border-green-200'
+                                  : docStatus === 'rejected'
+                                  ? 'bg-red-50 text-red-700 border-red-200'
+                                  : 'bg-amber-50 text-amber-700 border-amber-200'
+                              }`}>
+                                {docStatus === 'verified' ? '✓ Verified' : docStatus === 'rejected' ? '✗ Rejected' : '⧗ Pending'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <a
+                              href={`http://localhost:5000${url}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-3 py-1.5 border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold text-[10px] rounded-lg transition flex items-center gap-1"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              View/Download
+                            </a>
+
+                            {docStatus !== 'verified' && (
+                              <button
+                                onClick={() => handleVerifyDocument(key)}
+                                className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white font-bold text-[10px] rounded-lg transition shadow flex items-center gap-1"
+                              >
+                                <CheckCircle className="w-3.5 h-3.5" />
+                                Verify
+                              </button>
+                            )}
+
+                            {docStatus !== 'rejected' && (
+                              <button
+                                onClick={() => handleOpenRejectDocModal(key)}
+                                className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 font-bold text-[10px] rounded-lg transition flex items-center gap-1"
+                              >
+                                <XCircle className="w-3.5 h-3.5" />
+                                Reject
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {docStatus === 'rejected' && docRemarks && (
+                          <div className="text-[10px] text-red-700 bg-red-50/50 border border-red-100 p-2.5 rounded-xl font-medium leading-relaxed">
+                            <span className="font-extrabold block text-[9px] uppercase tracking-wider text-red-500 mb-0.5">Rejection Remarks:</span>
+                            {docRemarks}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                   {Object.keys(docs).length === 0 && (
                     <p className="text-xs text-slate-400 py-2">No documents uploaded.</p>
                   )}
@@ -403,6 +516,39 @@ const AdminApplicationDetail = () => {
             placeholder={modal.placeholder}
             value={remarkInput}
             onChange={(e) => setRemarkInput(e.target.value)}
+            rows={4}
+            className="w-full text-xs p-3 border rounded-xl outline-none focus:border-blue-500 transition min-h-[90px]"
+          />
+        </div>
+      </Modal>
+
+      {/* Document Rejection Modal */}
+      <Modal
+        isOpen={docModal.open}
+        onClose={() => setDocModal({ ...docModal, open: false })}
+        title="Reject Document"
+        footer={
+          <>
+            <button onClick={() => setDocModal({ ...docModal, open: false })} className="px-4 py-2 border text-slate-500 font-bold rounded-xl text-xs hover:bg-slate-50">Cancel</button>
+            <button
+              onClick={handleRejectDocument}
+              disabled={actionLoading}
+              className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs shadow flex items-center gap-1.5"
+            >
+              {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              Confirm Rejection
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-xs text-slate-500 leading-normal">
+            Please enter a remark explaining why this document is being rejected. This feedback will be displayed to the student so they can correct and re-upload the document.
+          </p>
+          <textarea
+            placeholder="E.g. Document is blurred or incorrect..."
+            value={docModal.remarks}
+            onChange={(e) => setDocModal({ ...docModal, remarks: e.target.value })}
             rows={4}
             className="w-full text-xs p-3 border rounded-xl outline-none focus:border-blue-500 transition min-h-[90px]"
           />

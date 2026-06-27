@@ -90,10 +90,37 @@ router.post('/upload', protect, (req, res) => {
         documentUrls[fieldname] = relativePath;
       });
 
+      // Update student profile documents if exists
+      const StudentProfile = require('../models/StudentProfile');
+      const profile = await StudentProfile.findOne({ studentId: req.user._id });
+      if (profile) {
+        if (documentUrls.photo) {
+          profile.profilePhoto = documentUrls.photo;
+        }
+        profile.documents = { ...profile.documents, ...documentUrls };
+        
+        // Reset verification status for newly uploaded files
+        Object.keys(documentUrls).forEach((key) => {
+          profile.documentStatuses.set(key, { status: 'pending', remarks: '' });
+        });
+
+        profile.markModified('documents');
+        profile.markModified('documentStatuses');
+        await profile.save();
+      }
+
       // Update application documents if one exists
       const application = await Application.findOne({ studentId: req.user._id });
       if (application) {
         application.documents = { ...application.documents, ...documentUrls };
+
+        // Reset verification status for newly uploaded files
+        Object.keys(documentUrls).forEach((key) => {
+          application.documentStatuses.set(key, { status: 'pending', remarks: '' });
+        });
+
+        application.markModified('documents');
+        application.markModified('documentStatuses');
         await application.save();
       }
 

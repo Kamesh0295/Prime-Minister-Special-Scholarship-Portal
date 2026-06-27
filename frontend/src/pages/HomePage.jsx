@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import Navbar from '../components/layout/Navbar';
+import ScholarshipInfoCenter from '../components/ScholarshipInfoCenter';
 import {
   GraduationCap,
   CheckCircle,
@@ -165,6 +166,9 @@ const HomePage = () => {
           </div>
         </div>
       </section>
+
+      {/* Scholarship Information Center */}
+      <ScholarshipInfoCenter />
 
       {/* How to Apply Section */}
       <section className="py-16 bg-primary-50" id="how-to-apply">

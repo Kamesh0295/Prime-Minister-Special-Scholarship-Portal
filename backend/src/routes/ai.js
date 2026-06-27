@@ -4,6 +4,112 @@ const { Anthropic } = require('@anthropic-ai/sdk');
 
 const router = express.Router();
 
+const callGemini = async (apiKey, systemPrompt, contentsOrMessage) => {
+  let contents = [];
+  if (typeof contentsOrMessage === 'string') {
+    contents = [{ parts: [{ text: `System Instruction: ${systemPrompt}\n\nUser Message: ${contentsOrMessage}` }] }];
+  } else {
+    contents = [
+      { role: 'user', parts: [{ text: `System Instruction: ${systemPrompt}\n\nUnderstood?` }] },
+      { role: 'model', parts: [{ text: 'Understood. I will act as the portal virtual assistant and follow those rules.' }] },
+      ...contentsOrMessage
+    ];
+  }
+
+  const payload = {
+    contents,
+    generationConfig: {
+      temperature: 0.3,
+      maxOutputTokens: 600,
+    },
+  };
+
+  if (typeof fetch !== 'undefined') {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const errorText = await res.text();
+      throw new Error(`Gemini API error: ${res.status} - ${errorText}`);
+    }
+    const data = await res.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text;
+  } else {
+    const https = require('https');
+    return new Promise((resolve, reject) => {
+      const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+      const req = https.request(
+        url,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        },
+        (res) => {
+          let body = '';
+          res.on('data', (chunk) => { body += chunk; });
+          res.on('end', () => {
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+              try {
+                const data = JSON.parse(body);
+                resolve(data.candidates?.[0]?.content?.parts?.[0]?.text);
+              } catch (e) {
+                reject(e);
+              }
+            } else {
+              reject(new Error(`Gemini API error: ${res.statusCode} - ${body}`));
+            }
+          });
+        }
+      );
+      req.on('error', (err) => reject(err));
+      req.write(JSON.stringify(payload));
+      req.end();
+    });
+  }
+};
+
+const buildGeminiContents = (messages) => {
+  const contents = [];
+  for (const msg of messages) {
+    const role = msg.sender === 'bot' ? 'model' : 'user';
+    if (contents.length > 0 && contents[contents.length - 1].role === role) {
+      contents[contents.length - 1].parts[0].text += '\n' + msg.text;
+    } else {
+      contents.push({
+        role: role,
+        parts: [{ text: msg.text }]
+      });
+    }
+  }
+  while (contents.length > 0 && contents[0].role !== 'user') {
+    contents.shift();
+  }
+  return contents.slice(-15);
+};
+
+const buildClaudeMessages = (messages) => {
+  const formatted = [];
+  for (const msg of messages) {
+    const role = msg.sender === 'bot' ? 'assistant' : 'user';
+    if (formatted.length > 0 && formatted[formatted.length - 1].role === role) {
+      formatted[formatted.length - 1].content += '\n' + msg.text;
+    } else {
+      formatted.push({
+        role: role,
+        content: msg.text
+      });
+    }
+  }
+  while (formatted.length > 0 && formatted[0].role !== 'user') {
+    formatted.shift();
+  }
+  return formatted.slice(-15);
+};
+
 router.use(protect);
 
 // ----------------------------------------------------
@@ -164,54 +270,164 @@ router.post('/eligibility', async (req, res) => {
 // ----------------------------------------------------
 router.get('/recommendations', async (req, res) => {
   try {
-    const category = req.user.category || 'OBC';
-    const state = req.user.state || 'Jammu & Kashmir';
-    const course = req.user.course || 'B.Tech';
+    const StudentProfile = require('../models/StudentProfile');
+    const profile = await StudentProfile.findOne({ studentId: req.user._id });
 
-    const allScholarships = [
+    // Extract profile values or fall back to user values/defaults
+    const category = profile?.category || req.user.category || 'OBC';
+    const state = profile?.address?.state || req.user.state || 'Jammu & Kashmir';
+    const degree = profile?.degree || req.user.course || 'B.Tech';
+    const cgpa = (profile?.cgpa !== undefined && profile?.cgpa !== null) ? profile.cgpa : 7.0;
+    const familyIncome = (profile?.familyIncome !== undefined && profile?.familyIncome !== null) ? profile.familyIncome : 250000;
+
+    const scholarships = [
       {
         name: 'Prime Minister Special Scholarship Scheme (PMSSS)',
         description: 'Specifically for students from Jammu & Kashmir and Ladakh pursuing undergraduate professional degrees.',
         provider: 'AICTE / Ministry of Education, Govt. of India',
         amount: '₹1,50,000 to ₹3,00,000 per annum',
-        eligibilityMatch: state === 'Jammu & Kashmir' || state === 'Ladakh' ? 98 : 45,
         criteria: 'Domicile of J&K/Ladakh, Family income <= 8 LPA, Passed 10+2.',
+        calculateMatch: () => {
+          let score = 0;
+          // State Check: 40% weight
+          if (['Jammu & Kashmir', 'Ladakh'].includes(state)) score += 40;
+          // Income Check: 30% weight
+          if (familyIncome <= 800000) score += 30;
+          // CGPA Check: 20% weight (assuming passing threshold)
+          if (cgpa >= 5.0) score += 20;
+          // Degree/Course Check: 10% weight
+          if (['B.Tech', 'MBBS', 'B.Sc', 'B.Com', 'B.A', 'B.E', 'B.Pharmacy'].includes(degree)) score += 10;
+          return score;
+        }
       },
       {
         name: 'Central Sector Scheme of Scholarship for College & University Students',
-        description: 'For university students scoring above 80th percentile in Class 12 board exams.',
+        description: 'For university students scoring above 80th percentile or outstanding CGPA in their studies.',
         provider: 'Department of Higher Education, Govt. of India',
         amount: '₹12,000 to ₹20,000 per annum',
-        eligibilityMatch: 85,
-        criteria: 'Marks > 80 percentile, Family income <= 4.5 LPA.',
+        criteria: 'Marks/CGPA >= 8.0 (80%), Family income <= 4.5 LPA.',
+        calculateMatch: () => {
+          let score = 0;
+          // CGPA Match: 40% weight
+          if (cgpa >= 8.0) score += 40;
+          else if (cgpa >= 7.0) score += 25;
+          else if (cgpa >= 6.0) score += 10;
+          
+          // Income Match: 30% weight
+          if (familyIncome <= 450000) score += 30;
+          else if (familyIncome <= 600000) score += 15;
+
+          // Category Match (General sector scheme): 20% weight
+          if (['General', 'OBC'].includes(category)) score += 20;
+          else score += 15;
+
+          // Domicile State (applicable nationally): 10% weight
+          score += 10;
+          return score;
+        }
       },
       {
         name: 'Post-Matric Scholarship Scheme for OBC Students',
         description: 'Financial support for OBC category students pursuing higher education.',
         provider: 'Ministry of Social Justice and Empowerment, Govt. of India',
         amount: '₹10,000 to ₹50,000 per annum',
-        eligibilityMatch: category === 'OBC' ? 95 : 10,
         criteria: 'OBC category student, family income <= 2.5 LPA.',
+        calculateMatch: () => {
+          let score = 0;
+          // Category Match: 45% weight
+          if (category === 'OBC') score += 45;
+          else if (['SC', 'ST'].includes(category)) score += 10;
+
+          // Income Match: 35% weight
+          if (familyIncome <= 250000) score += 35;
+          else if (familyIncome <= 400000) score += 15;
+
+          // CGPA Match: 20% weight
+          if (cgpa >= 5.0) score += 20;
+          else score += 10;
+          return score;
+        }
       },
       {
-        name: 'State Merit Scholarship Scheme',
-        description: 'Merit-based financial aid offered by the state education department.',
-        provider: `Government of ${state || 'Delhi'}`,
-        amount: '₹15,000 per annum',
-        eligibilityMatch: 75,
-        criteria: `Resident of ${state || 'State'}, Min 60% in qualifying exam.`,
+        name: 'Post-Matric Scholarship Scheme for SC/ST Students',
+        description: 'Tuition and maintenance fee reimbursement scheme for Scheduled Caste & Tribe candidates.',
+        provider: 'Ministry of Tribal Affairs / Social Justice, Govt. of India',
+        amount: '₹20,000 to ₹1,20,000 per annum',
+        criteria: 'SC/ST category student, family income <= 2.5 LPA.',
+        calculateMatch: () => {
+          let score = 0;
+          // Category Match: 45% weight
+          if (['SC', 'ST'].includes(category)) score += 45;
+          
+          // Income Match: 35% weight
+          if (familyIncome <= 250000) score += 35;
+          else if (familyIncome <= 400000) score += 15;
+
+          // CGPA Match: 20% weight
+          if (cgpa >= 5.0) score += 20;
+          return score;
+        }
       },
       {
-        name: 'ONGC Scholarship for Meritorious SC/ST/OBC Students',
-        description: 'Scholarship program by ONGC targeting professional courses like Engineering, MBBS, MBA.',
+        name: 'ONGC Merit Scholarship for SC/ST/OBC Students',
+        description: 'ONGC Foundation scholarship targeting professional streams (Engineering, MBBS, MBA).',
         provider: 'ONGC Foundation',
         amount: '₹48,000 per annum',
-        eligibilityMatch: ['SC', 'ST', 'OBC'].includes(category) && ['B.Tech', 'MBBS', 'MBA'].includes(course) ? 90 : 30,
-        criteria: 'SC/ST/OBC category, pursuing Professional Courses, Min 60% marks.',
+        criteria: 'SC/ST/OBC, professional course (B.Tech, MBBS, MBA), income <= 4.5 LPA, CGPA >= 6.0.',
+        calculateMatch: () => {
+          let score = 0;
+          // Category check: 30% weight
+          if (['SC', 'ST', 'OBC'].includes(category)) score += 30;
+          
+          // Degree check: 30% weight
+          if (['B.Tech', 'MBBS', 'MBA', 'B.E'].includes(degree)) score += 30;
+          
+          // Income check: 20% weight
+          if (familyIncome <= 450000) score += 20;
+
+          // CGPA check: 20% weight
+          if (cgpa >= 6.0) score += 20;
+          return score;
+        }
       },
+      {
+        name: 'State Merit-cum-Means Scholarship Scheme',
+        description: 'Merit and means-based financial aid offered by state government departments.',
+        provider: `Government of ${state}`,
+        amount: '₹15,000 to ₹30,000 per annum',
+        criteria: `Resident of matching state, family income <= 6 LPA, CGPA >= 6.0.`,
+        calculateMatch: () => {
+          let score = 0;
+          // State Match: 40% weight
+          if (state && state !== 'Unknown') score += 40;
+          
+          // Income Match: 30% weight
+          if (familyIncome <= 600000) score += 30;
+          else if (familyIncome <= 800000) score += 15;
+
+          // CGPA Match: 20% weight
+          if (cgpa >= 6.0) score += 20;
+          else if (cgpa >= 5.0) score += 10;
+
+          // Category Match: 10% weight
+          score += 10;
+          return score;
+        }
+      }
     ];
 
-    // Sort by highest match
+    const allScholarships = scholarships.map((s) => {
+      const matchPercent = s.calculateMatch();
+      return {
+        name: s.name,
+        description: s.description,
+        provider: s.provider,
+        amount: s.amount,
+        criteria: s.criteria,
+        eligibilityMatch: matchPercent,
+      };
+    });
+
     allScholarships.sort((a, b) => b.eligibilityMatch - a.eligibilityMatch);
 
     return res.json({
@@ -228,18 +444,15 @@ router.get('/recommendations', async (req, res) => {
 // ----------------------------------------------------
 router.post('/chat', async (req, res) => {
   try {
-    const { message, language = 'en' } = req.body;
+    const { message, language = 'en', history = [] } = req.body;
 
     if (!message) {
       return res.status(400).json({ success: false, message: 'Message is required.' });
     }
 
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-
-    if (apiKey && apiKey.trim() !== '') {
-      try {
-        const anthropic = new Anthropic({ apiKey });
-        const systemPrompt = `You are a virtual assistant for the Prime Minister Special Scholarship Scheme (PMSS / PMSSS) portal of the Government of India.
+    const geminiApiKey = process.env.GEMINI_API_KEY;
+    const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
+    const systemPrompt = `You are a virtual assistant for the Prime Minister Special Scholarship Scheme (PMSS / PMSSS) portal of the Government of India.
 You must answer queries professionally, accurately, and assistively in the language requested (User language: ${language}).
 Rules of PMSSS:
 1. Eligibility: Open to residents of J&K and Ladakh who passed 10+2 or diploma. 
@@ -250,28 +463,49 @@ Rules of PMSSS:
 
 Keep your response friendly, clear, and structured. Include a reference to contact support@pmss.gov.in for direct help.`;
 
+    let reply = '';
+    const conversationHistory = [...history, { sender: 'user', text: message }];
+
+    if (geminiApiKey && geminiApiKey.trim() !== '') {
+      try {
+        console.log('[DEBUG] Querying Gemini AI chatbot...');
+        const contents = buildGeminiContents(conversationHistory);
+        reply = await callGemini(geminiApiKey, systemPrompt, contents);
+      } catch (err) {
+        console.error('Gemini API Error in chat, falling back to Claude or local chat engine:', err.message);
+      }
+    }
+
+    if (!reply && anthropicApiKey && anthropicApiKey.trim() !== '') {
+      try {
+        console.log('[DEBUG] Querying Claude AI chatbot...');
+        const anthropic = new Anthropic({ apiKey: anthropicApiKey });
+        const formattedMessages = buildClaudeMessages(conversationHistory);
         const response = await anthropic.messages.create({
           model: 'claude-3-5-sonnet-20241022',
           max_tokens: 600,
-          messages: [{ role: 'user', content: message }],
+          messages: formattedMessages,
           system: systemPrompt,
           temperature: 0.3,
         });
-
-        return res.json({
-          success: true,
-          data: {
-            reply: response.content[0].text,
-          },
-        });
+        reply = response.content[0].text;
       } catch (err) {
         console.error('Claude API Error in chat, falling back to local chat engine:', err.message);
       }
     }
 
+    if (reply) {
+      return res.json({
+        success: true,
+        data: {
+          reply,
+        },
+      });
+    }
+
     // Local Chat Engine (Multilingual Keyword Search)
     const lowerMessage = message.toLowerCase();
-    let reply = '';
+    reply = '';
 
     // English responses
     const responsesEn = {

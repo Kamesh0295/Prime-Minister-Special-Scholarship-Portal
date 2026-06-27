@@ -7,9 +7,10 @@ import ProgressSteps from '../components/ui/ProgressSteps';
 import DocumentUploadCard from '../components/ui/DocumentUploadCard';
 import { showSuccess, showError, showInfo } from '../store/slices/toastSlice';
 import { applicationSuccess } from '../store/slices/applicationSlice';
-import { getApplication, createApplication, updateApplication } from '../services/studentService';
+import { profileSuccess } from '../store/slices/profileSlice';
+import { getApplication, createApplication, updateApplication, getProfile } from '../services/studentService';
 import { uploadDocuments } from '../services/documentService';
-import { ChevronRight, ChevronLeft, Save, Send, Eye, Loader2, Sparkles, CheckCircle2, XCircle, Info, Landmark } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Save, Send, Eye, Loader2, Sparkles, CheckCircle2, XCircle, Info, Landmark, Lock, User } from 'lucide-react';
 import { useTranslation } from '../context/LanguageContext';
 
 const STEPS = [
@@ -55,10 +56,10 @@ const FloatInput = ({ id, name, label, value, onChange, type = 'text', required,
   </div>
 );
 
-const SelectField = ({ id, name, label, value, onChange, options, required }) => (
+const SelectField = ({ id, name, label, value, onChange, options, required, disabled }) => (
   <div>
     <label htmlFor={id} className="text-xs font-medium text-gray-600 mb-1 block">{label}{required ? ' *' : ''}</label>
-    <select id={id} name={name} value={value} onChange={onChange} className="form-select">
+    <select id={id} name={name} value={value} onChange={onChange} className="form-select" disabled={disabled}>
       <option value="">Select {label}</option>
       {options.map((o) => (
         <option key={o.value || o} value={o.value || o}>{o.label || o}</option>
@@ -87,25 +88,67 @@ const ScholarshipApplicationForm = () => {
   const [ocrLoading, setOcrLoading] = useState({});
   const [ocrData, setOcrData] = useState(null);
 
-  // Pre-fill from user profile
+  // Student Profile Integration State
+  const [profile, setProfile] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+
+  // Fetch Student Profile status
   useEffect(() => {
-    if (user) {
+    const fetchStudentProfile = async () => {
+      try {
+        const res = await getProfile();
+        if (res.data.success) {
+          // Verify if profile exists and has been created
+          if (res.data.exists) {
+            setProfile(res.data.data);
+          } else {
+            setProfile(null);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch student profile:', err);
+      } finally {
+        setProfileLoading(false);
+      }
+    };
+    fetchStudentProfile();
+  }, []);
+
+  // Pre-fill from student profile when loaded
+  useEffect(() => {
+    if (profile && (profile.completionPercentage || 0) >= 80) {
       setPersonal((p) => ({
         ...p,
-        fullName: user.fullName || '',
-        phone: user.phone || '',
-        email: user.email || '',
-        state: user.state || '',
-        district: user.district || '',
+        fullName: profile.fullName || '',
+        dateOfBirth: profile.dob ? new Date(profile.dob).toISOString().split('T')[0] : '',
+        gender: profile.gender || '',
+        aadhaarNumber: profile.aadhaar || '',
+        phone: profile.phone || '',
+        email: profile.email || '',
+        permanentAddress: profile.address?.permanentAddress || '',
+        state: profile.address?.state || '',
+        district: profile.address?.district || '',
+        annualIncome: profile.familyIncome || '',
       }));
       setAcademic((a) => ({
         ...a,
-        institutionName: user.institution || '',
-        courseName: user.course || '',
-        yearOfStudy: user.yearOfStudy || '',
+        institutionName: profile.collegeName || '',
+        courseName: profile.degree || '',
+        yearOfStudy: profile.yearOfStudy || '',
+        rollNumber: profile.rollNumber || '',
+        previousYearMarks: profile.cgpa || '',
+        boardUniversityName: profile.universityName || '',
+      }));
+      setBank((b) => ({
+        ...b,
+        accountHolderName: profile.accountHolderName || '',
+        bankName: profile.bankName || '',
+        branchName: profile.branchName || '',
+        accountNumber: profile.accountNumber || '',
+        ifscCode: profile.ifscCode || '',
       }));
     }
-  }, [user]);
+  }, [profile]);
 
   // Load draft if exists
   useEffect(() => {
@@ -202,7 +245,12 @@ const ScholarshipApplicationForm = () => {
     score += (bankCount / bankItems.length) * 25;
 
     const docItems = ['aadhaar', 'incomeCertificate', 'marksheet', 'photo'];
-    const uploadedCount = docItems.filter((d) => docs[d] || application?.documents?.[d]).length;
+    const uploadedCount = docItems.filter((d) => 
+      docs[d] || 
+      application?.documents?.[d] || 
+      profile?.documents?.[d] || 
+      (d === 'photo' && profile?.profilePhoto)
+    ).length;
     score += (uploadedCount / docItems.length) * 25;
 
     return Math.round(score);
@@ -275,7 +323,24 @@ const ScholarshipApplicationForm = () => {
   const handleSaveDraft = async () => {
     setSaving(true);
     try {
-      const app = await saveOrCreate(buildPayload('draft'));
+      // Refresh database states first
+      const appRes = await getApplication();
+      const currentApp = appRes.data.data;
+      const profileRes = await getProfile();
+      const currentProfile = profileRes.data.data;
+
+      const payload = buildPayload('draft');
+      payload.documents = {
+        aadhaar: currentApp?.documents?.aadhaar || currentProfile?.documents?.aadhaar || '',
+        incomeCertificate: currentApp?.documents?.incomeCertificate || currentProfile?.documents?.incomeCertificate || '',
+        casteCertificate: currentApp?.documents?.casteCertificate || currentProfile?.documents?.casteCertificate || '',
+        marksheet: currentApp?.documents?.marksheet || currentProfile?.documents?.marksheet || '',
+        bankPassbook: currentApp?.documents?.bankPassbook || currentProfile?.documents?.bankPassbook || '',
+        bonafide: currentApp?.documents?.bonafide || currentProfile?.documents?.bonafide || '',
+        photo: currentApp?.documents?.photo || currentProfile?.profilePhoto || currentProfile?.documents?.photo || '',
+      };
+
+      const app = await saveOrCreate(payload);
       dispatch(applicationSuccess(app));
       dispatch(showSuccess('Draft saved successfully!'));
     } catch (err) {
@@ -286,33 +351,173 @@ const ScholarshipApplicationForm = () => {
   };
 
   const handleSubmit = async () => {
-    const required = ['aadhaar', 'incomeCertificate', 'marksheet', 'photo'];
-    const missing = required.filter((d) => !docs[d] && !application?.documents?.[d]);
-    if (missing.length > 0) {
-      dispatch(showError(`Please upload: ${missing.join(', ')}`));
-      return;
-    }
-
     setSubmitting(true);
     try {
-      const newFiles = Object.entries(docs).filter(([, v]) => v instanceof File);
-      if (newFiles.length > 0) {
-        const formData = new FormData();
-        newFiles.forEach(([key, file]) => formData.append(key, file));
-        await uploadDocuments(formData);
-        dispatch(showInfo('Documents uploaded...'));
+      // 8. Auto-fetch latest profile and application data before submitting to prevent out-of-sync checks
+      const profileRes = await getProfile();
+      let latestProfile = profile;
+      if (profileRes.data.success && profileRes.data.exists) {
+        latestProfile = profileRes.data.data;
+        setProfile(latestProfile);
+        dispatch(profileSuccess({ data: latestProfile, exists: true }));
       }
 
-      const app = await saveOrCreate(buildPayload('submitted'));
+      const appRes = await getApplication();
+      let latestApp = application;
+      if (appRes.data.data) {
+        latestApp = appRes.data.data;
+        setAppId(latestApp._id);
+        dispatch(applicationSuccess(latestApp));
+      }
+
+      // 4. Validate using profile.documents, application.documents, and local docs state
+      const required = ['aadhaar', 'incomeCertificate', 'marksheet', 'photo'];
+      
+      // 5. Add console logs for debugging
+      console.log('[DEBUG] Validating scholarship application documents...');
+      console.log('[DEBUG] Local unsaved docs state:', docs);
+      console.log('[DEBUG] DB Application documents:', latestApp?.documents);
+      console.log('[DEBUG] DB Profile documents:', latestProfile?.documents);
+      console.log('[DEBUG] DB Profile profilePhoto:', latestProfile?.profilePhoto);
+
+      const missing = [];
+      const validationDetails = {};
+
+      required.forEach((field) => {
+        const localVal = docs[field];
+        const appVal = latestApp?.documents?.[field];
+        const profileVal = field === 'photo'
+          ? (latestProfile?.profilePhoto || latestProfile?.documents?.photo)
+          : latestProfile?.documents?.[field];
+
+        const exists = localVal || appVal || profileVal;
+        validationDetails[field] = {
+          exists: !!exists,
+          local: localVal ? (localVal.name || 'File Object') : 'empty',
+          dbApp: appVal || 'empty',
+          dbProfile: profileVal || 'empty',
+        };
+
+        if (!exists) {
+          missing.push(field);
+        }
+      });
+
+      console.log('[DEBUG] Document validation results:', validationDetails);
+
+      if (missing.length > 0) {
+        // 10. Detailed error message showing exactly what is missing and current values
+        const missingDetails = missing.map((field) => {
+          const detail = validationDetails[field];
+          return `- ${field}: (local: ${detail.local}, application db: ${detail.dbApp}, profile db: ${detail.dbProfile})`;
+        }).join('\n');
+        
+        dispatch(showError(`Please upload all required documents.\nMissing:\n${missingDetails}`));
+        setSubmitting(false);
+        return;
+      }
+
+      // 9. If files exist, upload only newly selected files and submit immediately
+      const newFiles = Object.entries(docs).filter(([, v]) => v instanceof File);
+      if (newFiles.length > 0) {
+        dispatch(showInfo('Uploading documents...'));
+        const formData = new FormData();
+        newFiles.forEach(([key, file]) => formData.append(key, file));
+        const uploadRes = await uploadDocuments(formData);
+        
+        if (uploadRes.data.success) {
+          dispatch(showSuccess('Documents uploaded successfully!'));
+          // 3. Refresh profile state after upload
+          const refreshedProfileRes = await getProfile();
+          if (refreshedProfileRes.data.success && refreshedProfileRes.data.exists) {
+            const refreshedProfile = refreshedProfileRes.data.data;
+            setProfile(refreshedProfile);
+            dispatch(profileSuccess({ data: refreshedProfile, exists: true }));
+          }
+          const refreshedAppRes = await getApplication();
+          if (refreshedAppRes.data.data) {
+            dispatch(applicationSuccess(refreshedAppRes.data.data));
+          }
+        }
+      }
+
+      // Re-fetch database states to build final payload
+      const finalProfileRes = await getProfile();
+      const finalProfile = finalProfileRes.data.data || latestProfile;
+      const finalAppRes = await getApplication();
+      const finalApp = finalAppRes.data.data || latestApp;
+
+      const payload = buildPayload('submitted');
+      payload.documents = {
+        aadhaar: finalApp?.documents?.aadhaar || finalProfile?.documents?.aadhaar || '',
+        incomeCertificate: finalApp?.documents?.incomeCertificate || finalProfile?.documents?.incomeCertificate || '',
+        casteCertificate: finalApp?.documents?.casteCertificate || finalProfile?.documents?.casteCertificate || '',
+        marksheet: finalApp?.documents?.marksheet || finalProfile?.documents?.marksheet || '',
+        bankPassbook: finalApp?.documents?.bankPassbook || finalProfile?.documents?.bankPassbook || '',
+        bonafide: docs.bonafide instanceof File ? '' : (finalApp?.documents?.bonafide || finalProfile?.documents?.bonafide || ''),
+        photo: finalApp?.documents?.photo || finalProfile?.profilePhoto || finalProfile?.documents?.photo || '',
+      };
+
+      console.log('[DEBUG] Submitting application with payload:', payload);
+
+      const app = await saveOrCreate(payload);
       dispatch(applicationSuccess(app));
       dispatch(showSuccess('Application submitted successfully!'));
       navigate('/dashboard/status');
     } catch (err) {
+      console.error('[DEBUG] Submission error:', err);
       dispatch(showError(err.response?.data?.message || 'Submission failed.'));
     } finally {
       setSubmitting(false);
     }
   };
+
+  if (profileLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="h-10 w-10 text-primary animate-spin" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (!profile || (profile.completionPercentage || 0) < 80) {
+    const currentPercent = profile ? (profile.completionPercentage || 0) : 0;
+    return (
+      <DashboardLayout>
+        <div className="card p-8 text-center max-w-lg mx-auto mt-12 space-y-6 shadow-card border border-gray-100">
+          <div className="h-16 w-16 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mx-auto border border-amber-100">
+            <Lock className="h-8 w-8" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-bold text-gray-900">Profile Completion Required</h2>
+            <p className="text-sm text-gray-500 max-w-md mx-auto leading-relaxed">
+              A minimum of 80% profile completion is required to apply for scholarships. Currently, your profile completion is at {currentPercent}%. Please complete your profile details (personal, academic, bank, and documents) to proceed.
+            </p>
+          </div>
+          
+          <div className="space-y-2 max-w-xs mx-auto">
+            <div className="flex justify-between items-center text-xs font-bold text-gray-500 uppercase">
+              <span>Profile Status</span>
+              <span className="text-amber-600 font-extrabold">{currentPercent}% Complete</span>
+            </div>
+            <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
+              <div className="bg-amber-500 h-full rounded-full transition-all duration-300" style={{ width: `${currentPercent}%` }} />
+            </div>
+          </div>
+
+          <button
+            onClick={() => navigate('/dashboard/profile')}
+            className="btn-primary inline-flex items-center gap-2 px-6 py-3 font-semibold shadow-primary"
+          >
+            <User className="h-4 w-4 text-white" />
+            Complete Profile Now
+          </button>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   const isAlreadySubmitted = application && !['draft', 'submitted'].includes(application.status) && application.status;
 
@@ -358,60 +563,45 @@ const ScholarshipApplicationForm = () => {
           <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm">
             
             {/* Step 0: Personal */}
-            {step === 0 && (
+             {step === 0 && (
               <div className="space-y-4">
+                <p className="text-xs text-blue-600 bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5 flex items-center gap-1.5 mb-4">
+                  <Info className="h-4 w-4 shrink-0" />
+                  Basic details are pre-filled and locked from My Profile. To edit, go to the My Profile page.
+                </p>
+
                 <div className="flex justify-between items-center border-b pb-2 mb-4">
                   <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide">{t('personalDetails')}</h2>
                   
-                  {/* OCR trigger */}
-                  <button
-                    onClick={() => triggerOCR('aadhaar')}
-                    disabled={ocrLoading.aadhaar}
-                    className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-extrabold text-[11px] rounded-lg transition flex items-center gap-1.5 disabled:opacity-50"
-                  >
-                    {ocrLoading.aadhaar ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                    {ocrLoading.aadhaar ? t('extracting') : t('ocrBtn')}
-                  </button>
+                  {/* OCR trigger is disabled since profile is pre-filled */}
                 </div>
                 
                 <div className="grid sm:grid-cols-2 gap-4">
-                  <FloatInput id="p-fullname" name="fullName" label={t('fullName')} value={personal.fullName} onChange={handleFieldChange(setPersonal)} required />
-                  <FloatInput id="p-dob" name="dateOfBirth" label={t('dob')} type="date" value={personal.dateOfBirth} onChange={handleFieldChange(setPersonal)} />
+                  <FloatInput id="p-fullname" name="fullName" label={t('fullName')} value={personal.fullName} onChange={handleFieldChange(setPersonal)} required disabled={true} />
+                  <FloatInput id="p-dob" name="dateOfBirth" label={t('dob')} type="date" value={personal.dateOfBirth} onChange={handleFieldChange(setPersonal)} disabled={true} />
                 </div>
-
+ 
                 <div className="grid sm:grid-cols-3 gap-4">
-                  <SelectField id="p-gender" name="gender" label="Gender" value={personal.gender} onChange={handleFieldChange(setPersonal)} options={['Male','Female','Other']} />
+                  <SelectField id="p-gender" name="gender" label="Gender" value={personal.gender} onChange={handleFieldChange(setPersonal)} options={['Male','Female','Other']} disabled={true} />
                   <FloatInput id="p-religion" name="religion" label="Religion" value={personal.religion} onChange={handleFieldChange(setPersonal)} />
                   <SelectField id="p-category" name="category" label={t('caste')} value={personal.category} onChange={handleFieldChange(setPersonal)} options={['SC','ST','OBC','General']} required />
                 </div>
-
+ 
                 <div className="grid sm:grid-cols-2 gap-4">
-                  <FloatInput id="p-aadhaar" name="aadhaarNumber" label={t('aadhaar')} value={personal.aadhaarNumber} onChange={handleFieldChange(setPersonal)} maxLength={12} />
-                  <FloatInput id="p-phone" name="phone" label={t('phone')} value={personal.phone} onChange={handleFieldChange(setPersonal)} maxLength={10} />
+                  <FloatInput id="p-aadhaar" name="aadhaarNumber" label={t('aadhaar')} value={personal.aadhaarNumber} onChange={handleFieldChange(setPersonal)} maxLength={12} disabled={true} />
+                  <FloatInput id="p-phone" name="phone" label={t('phone')} value={personal.phone} onChange={handleFieldChange(setPersonal)} maxLength={10} disabled={true} />
                 </div>
-
+ 
                 <div className="grid sm:grid-cols-2 gap-4">
-                  <FloatInput id="p-email" name="email" label={t('email')} type="email" value={personal.email} onChange={handleFieldChange(setPersonal)} />
-                  <div className="flex gap-2 items-center">
-                    <div className="flex-1">
-                      <FloatInput id="p-income" name="annualIncome" label={t('income')} type="number" value={personal.annualIncome} onChange={handleFieldChange(setPersonal)} required />
-                    </div>
-                    <button
-                      onClick={() => triggerOCR('incomeCertificate')}
-                      disabled={ocrLoading.incomeCertificate}
-                      className="px-2.5 py-3 mt-1.5 border hover:bg-slate-50 text-slate-500 rounded-xl transition flex items-center justify-center shrink-0"
-                      title="Scan Income Cert"
-                    >
-                      {ocrLoading.incomeCertificate ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 text-blue-500" />}
-                    </button>
-                  </div>
+                  <FloatInput id="p-email" name="email" label={t('email')} type="email" value={personal.email} onChange={handleFieldChange(setPersonal)} disabled={true} />
+                  <FloatInput id="p-income" name="annualIncome" label={t('income')} type="number" value={personal.annualIncome} onChange={handleFieldChange(setPersonal)} required disabled={true} />
                 </div>
-
-                <FloatInput id="p-address" name="permanentAddress" label="Permanent Address" value={personal.permanentAddress} onChange={handleFieldChange(setPersonal)} />
-
+ 
+                <FloatInput id="p-address" name="permanentAddress" label="Permanent Address" value={personal.permanentAddress} onChange={handleFieldChange(setPersonal)} disabled={true} />
+ 
                 <div className="grid sm:grid-cols-2 gap-4">
-                  <SelectField id="p-state" name="state" label={t('state')} value={personal.state} onChange={handleFieldChange(setPersonal)} options={STATES} required />
-                  <FloatInput id="p-district" name="district" label={t('district')} value={personal.district} onChange={handleFieldChange(setPersonal)} />
+                  <SelectField id="p-state" name="state" label={t('state')} value={personal.state} onChange={handleFieldChange(setPersonal)} options={STATES} required disabled={true} />
+                  <FloatInput id="p-district" name="district" label={t('district')} value={personal.district} onChange={handleFieldChange(setPersonal)} disabled={true} />
                 </div>
               </div>
             )}
@@ -419,49 +609,47 @@ const ScholarshipApplicationForm = () => {
             {/* Step 1: Academic */}
             {step === 1 && (
               <div className="space-y-4">
+                <p className="text-xs text-blue-600 bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5 flex items-center gap-1.5 mb-4">
+                  <Info className="h-4 w-4 shrink-0" />
+                  Academic details are pre-filled and locked from My Profile. To edit, go to the My Profile page.
+                </p>
+
                 <div className="flex justify-between items-center border-b pb-2 mb-4">
                   <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide">{t('academicDetails')}</h2>
-                  <button
-                    onClick={() => triggerOCR('marksheet')}
-                    disabled={ocrLoading.marksheet}
-                    className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-extrabold text-[11px] rounded-lg transition flex items-center gap-1.5 disabled:opacity-50"
-                  >
-                    {ocrLoading.marksheet ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                    {ocrLoading.marksheet ? t('extracting') : 'Scan Mark Sheet (OCR)'}
-                  </button>
+                  
+                  {/* OCR trigger is disabled since profile is pre-filled */}
                 </div>
                 
-                <FloatInput id="a-inst" name="institutionName" label={t('institution')} value={academic.institutionName} onChange={handleFieldChange(setAcademic)} required />
+                <FloatInput id="a-inst" name="institutionName" label={t('institution')} value={academic.institutionName} onChange={handleFieldChange(setAcademic)} required disabled={true} />
                 <FloatInput id="a-addr" name="institutionAddress" label="Institution Address" value={academic.institutionAddress} onChange={handleFieldChange(setAcademic)} />
                 
                 <div className="grid sm:grid-cols-2 gap-4">
-                  <FloatInput id="a-course" name="courseName" label={t('course')} value={academic.courseName} onChange={handleFieldChange(setAcademic)} required />
+                  <FloatInput id="a-course" name="courseName" label={t('course')} value={academic.courseName} onChange={handleFieldChange(setAcademic)} required disabled={true} />
                   <SelectField id="a-year" name="yearOfStudy" label={t('yearOfStudy')} value={academic.yearOfStudy} onChange={handleFieldChange(setAcademic)}
-                    options={['1st Year','2nd Year','3rd Year','4th Year','5th Year']} required />
+                    options={['1st Year','2nd Year','3rd Year','4th Year','5th Year']} required disabled={true} />
                 </div>
-
+ 
                 <div className="grid sm:grid-cols-2 gap-4">
-                  <FloatInput id="a-roll" name="rollNumber" label={t('rollNumber')} value={academic.rollNumber} onChange={handleFieldChange(setAcademic)} />
-                  <FloatInput id="a-marks" name="previousYearMarks" label={t('marks')} type="number" value={academic.previousYearMarks} onChange={handleFieldChange(setAcademic)} />
+                  <FloatInput id="a-roll" name="rollNumber" label={t('rollNumber')} value={academic.rollNumber} onChange={handleFieldChange(setAcademic)} disabled={true} />
+                  <FloatInput id="a-marks" name="previousYearMarks" label={t('marks')} type="number" value={academic.previousYearMarks} onChange={handleFieldChange(setAcademic)} disabled={true} />
                 </div>
-
-                <FloatInput id="a-uni" name="boardUniversityName" label="Board / University Name" value={academic.boardUniversityName} onChange={handleFieldChange(setAcademic)} required />
+ 
+                <FloatInput id="a-uni" name="boardUniversityName" label="Board / University Name" value={academic.boardUniversityName} onChange={handleFieldChange(setAcademic)} required disabled={true} />
               </div>
             )}
 
             {/* Step 2: Bank */}
             {step === 2 && (
               <div className="space-y-4">
+                <p className="text-xs text-blue-600 bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5 flex items-center gap-1.5 mb-4">
+                  <Info className="h-4 w-4 shrink-0" />
+                  Bank details are pre-filled and locked from My Profile. To edit, go to the My Profile page.
+                </p>
+
                 <div className="flex justify-between items-center border-b pb-2 mb-4">
                   <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wide">{t('bankDetails')}</h2>
-                  <button
-                    onClick={() => triggerOCR('bankPassbook')}
-                    disabled={ocrLoading.bankPassbook}
-                    className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-extrabold text-[11px] rounded-lg transition flex items-center gap-1.5 disabled:opacity-50"
-                  >
-                    {ocrLoading.bankPassbook ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                    {ocrLoading.bankPassbook ? t('extracting') : 'Scan Passbook (OCR)'}
-                  </button>
+                  
+                  {/* OCR trigger is disabled since profile is pre-filled */}
                 </div>
                 
                 <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2 flex items-center gap-2">
@@ -469,16 +657,16 @@ const ScholarshipApplicationForm = () => {
                   Ensure bank accounts are active and seeded with your Aadhaar for Direct Benefit Transfer (DBT).
                 </p>
 
-                <FloatInput id="b-holder" name="accountHolderName" label="Account Holder Name" value={bank.accountHolderName} onChange={handleFieldChange(setBank)} required />
+                <FloatInput id="b-holder" name="accountHolderName" label="Account Holder Name" value={bank.accountHolderName} onChange={handleFieldChange(setBank)} required disabled={true} />
                 
                 <div className="grid sm:grid-cols-2 gap-4">
-                  <FloatInput id="b-bank" name="bankName" label={t('bankName')} value={bank.bankName} onChange={handleFieldChange(setBank)} required />
-                  <FloatInput id="b-branch" name="branchName" label="Branch Name" value={bank.branchName} onChange={handleFieldChange(setBank)} />
+                  <FloatInput id="b-bank" name="bankName" label={t('bankName')} value={bank.bankName} onChange={handleFieldChange(setBank)} required disabled={true} />
+                  <FloatInput id="b-branch" name="branchName" label="Branch Name" value={bank.branchName} onChange={handleFieldChange(setBank)} disabled={true} />
                 </div>
 
                 <div className="grid sm:grid-cols-2 gap-4">
-                  <FloatInput id="b-acc" name="accountNumber" label={t('accNo')} value={bank.accountNumber} onChange={handleFieldChange(setBank)} required />
-                  <FloatInput id="b-ifsc" name="ifscCode" label={t('ifsc')} value={bank.ifscCode} onChange={handleFieldChange(setBank)} required />
+                  <FloatInput id="b-acc" name="accountNumber" label={t('accNo')} value={bank.accountNumber} onChange={handleFieldChange(setBank)} required disabled={true} />
+                  <FloatInput id="b-ifsc" name="ifscCode" label={t('ifsc')} value={bank.ifscCode} onChange={handleFieldChange(setBank)} required disabled={true} />
                 </div>
               </div>
             )}
@@ -486,17 +674,57 @@ const ScholarshipApplicationForm = () => {
             {/* Step 3: Documents */}
             {step === 3 && (
               <div className="space-y-4">
+                <p className="text-xs text-blue-600 bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5 flex items-center gap-1.5 mb-4">
+                  <Info className="h-4 w-4 shrink-0" />
+                  Profile documents are pre-filled and locked from My Profile. To edit, go to the My Profile page.
+                </p>
+
                 <h2 className="text-sm font-bold text-slate-800 border-b pb-2 mb-4 uppercase tracking-wide">{t('documents')}</h2>
                 <p className="text-[11px] text-slate-400">All certificates must be uploaded as legible PDFs (max 2MB). Photo should be JPG/PNG format.</p>
                 
                 <div className="grid sm:grid-cols-2 gap-5">
-                  <DocumentUploadCard label="Aadhaar Card *" fieldName="aadhaar" hint="PDF only, max 2MB" value={application?.documents?.aadhaar} onChange={handleDocChange} />
-                  <DocumentUploadCard label="Income Certificate *" fieldName="incomeCertificate" hint="PDF only, max 2MB" value={application?.documents?.incomeCertificate} onChange={handleDocChange} />
-                  <DocumentUploadCard label="Caste Certificate (if applicable)" fieldName="casteCertificate" hint="PDF only, max 2MB" value={application?.documents?.casteCertificate} onChange={handleDocChange} />
-                  <DocumentUploadCard label="Class 12 / Qualifying Marksheet *" fieldName="marksheet" hint="PDF only, max 2MB" value={application?.documents?.marksheet} onChange={handleDocChange} />
-                  <DocumentUploadCard label="Bank Passbook / Cancelled Cheque" fieldName="bankPassbook" hint="PDF only, max 2MB" value={application?.documents?.bankPassbook} onChange={handleDocChange} />
-                  <DocumentUploadCard label="Bonafide Certificate from College" fieldName="bonafide" hint="PDF only, max 2MB" value={application?.documents?.bonafide} onChange={handleDocChange} />
-                  <DocumentUploadCard label="Passport Size Photo *" fieldName="photo" hint="JPG/PNG, max 2MB" accept=".jpg,.jpeg,.png" value={application?.documents?.photo} onChange={handleDocChange} />
+                  <DocumentUploadCard
+                    label="Aadhaar Card *" fieldName="aadhaar" hint="PDF only, max 2MB"
+                    value={application?.documents?.aadhaar || profile?.documents?.aadhaar} onChange={handleDocChange} readOnly={true}
+                    status={application?.documentStatuses?.aadhaar?.status || profile?.documentStatuses?.aadhaar?.status}
+                    remarks={application?.documentStatuses?.aadhaar?.remarks || profile?.documentStatuses?.aadhaar?.remarks}
+                  />
+                  <DocumentUploadCard
+                    label="Income Certificate *" fieldName="incomeCertificate" hint="PDF only, max 2MB"
+                    value={application?.documents?.incomeCertificate || profile?.documents?.incomeCertificate} onChange={handleDocChange} readOnly={true}
+                    status={application?.documentStatuses?.incomeCertificate?.status || profile?.documentStatuses?.incomeCertificate?.status}
+                    remarks={application?.documentStatuses?.incomeCertificate?.remarks || profile?.documentStatuses?.incomeCertificate?.remarks}
+                  />
+                  <DocumentUploadCard
+                    label="Caste Certificate (if applicable)" fieldName="casteCertificate" hint="PDF only, max 2MB"
+                    value={application?.documents?.casteCertificate || profile?.documents?.casteCertificate} onChange={handleDocChange} readOnly={true}
+                    status={application?.documentStatuses?.casteCertificate?.status || profile?.documentStatuses?.casteCertificate?.status}
+                    remarks={application?.documentStatuses?.casteCertificate?.remarks || profile?.documentStatuses?.casteCertificate?.remarks}
+                  />
+                  <DocumentUploadCard
+                    label="Class 12 / Qualifying Marksheet *" fieldName="marksheet" hint="PDF only, max 2MB"
+                    value={application?.documents?.marksheet || profile?.documents?.marksheet} onChange={handleDocChange} readOnly={true}
+                    status={application?.documentStatuses?.marksheet?.status || profile?.documentStatuses?.marksheet?.status}
+                    remarks={application?.documentStatuses?.marksheet?.remarks || profile?.documentStatuses?.marksheet?.remarks}
+                  />
+                  <DocumentUploadCard
+                    label="Bank Passbook / Cancelled Cheque" fieldName="bankPassbook" hint="PDF only, max 2MB"
+                    value={application?.documents?.bankPassbook || profile?.documents?.bankPassbook} onChange={handleDocChange} readOnly={true}
+                    status={application?.documentStatuses?.bankPassbook?.status || profile?.documentStatuses?.bankPassbook?.status}
+                    remarks={application?.documentStatuses?.bankPassbook?.remarks || profile?.documentStatuses?.bankPassbook?.remarks}
+                  />
+                  <DocumentUploadCard
+                    label="Bonafide Certificate from College" fieldName="bonafide" hint="PDF only, max 2MB"
+                    value={application?.documents?.bonafide} onChange={handleDocChange}
+                    status={application?.documentStatuses?.bonafide?.status}
+                    remarks={application?.documentStatuses?.bonafide?.remarks}
+                  />
+                  <DocumentUploadCard
+                    label="Passport Size Photo *" fieldName="photo" hint="JPG/PNG, max 2MB" accept=".jpg,.jpeg,.png"
+                    value={application?.documents?.photo || profile?.profilePhoto} onChange={handleDocChange} readOnly={true}
+                    status={application?.documentStatuses?.photo?.status || profile?.documentStatuses?.photo?.status}
+                    remarks={application?.documentStatuses?.photo?.remarks || profile?.documentStatuses?.photo?.remarks}
+                  />
                 </div>
               </div>
             )}

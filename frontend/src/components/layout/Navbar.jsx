@@ -14,7 +14,10 @@ import {
   GraduationCap,
   Menu,
   X,
+  Sun,
+  Moon,
 } from 'lucide-react';
+
 
 const Navbar = ({ onMenuToggle, sidebarOpen }) => {
   const { user } = useSelector((s) => s.auth);
@@ -48,11 +51,13 @@ const Navbar = ({ onMenuToggle, sidebarOpen }) => {
     ? [
         { to: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
         { to: '/admin/applications', icon: FileText, label: 'Applications' },
+        { to: '/admin/profiles', icon: User, label: 'Profiles' },
         { to: '/admin/reports', icon: BookOpen, label: 'Reports' },
         { to: '/admin/users', icon: User, label: 'Users' },
       ]
     : [
         { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+        { to: '/dashboard/profile', icon: User, label: 'My Profile' },
         { to: '/dashboard/application', icon: FileText, label: 'Application' },
         { to: '/dashboard/status', icon: Bell, label: 'Status' },
       ];
@@ -131,6 +136,8 @@ const Navbar = ({ onMenuToggle, sidebarOpen }) => {
                   {isAdmin ? 'Admin' : user?.role === 'institution_officer' ? 'College Nodal' : 'Student'}
                 </span>
 
+
+
                 {/* Profile Dropdown */}
                 <div className="relative" ref={dropdownRef}>
                   <button
@@ -153,6 +160,16 @@ const Navbar = ({ onMenuToggle, sidebarOpen }) => {
                         <p className="text-sm font-semibold text-gray-900 truncate">{user.fullName}</p>
                         <p className="text-xs text-gray-400 truncate">{user.email}</p>
                       </div>
+                      {!isAdmin && (
+                        <Link
+                          to="/dashboard/profile"
+                          onClick={() => setProfileOpen(false)}
+                          className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 border-b border-gray-50 transition-colors"
+                        >
+                          <User className="h-4 w-4" />
+                          My Profile
+                        </Link>
+                      )}
                       <button
                         onClick={handleLogout}
                         className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"

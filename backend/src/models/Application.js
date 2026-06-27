@@ -52,6 +52,14 @@ const ApplicationSchema = new mongoose.Schema(
       bonafide: { type: String },
       photo: { type: String },
     },
+    documentStatuses: {
+      type: Map,
+      of: new mongoose.Schema({
+        status: { type: String, enum: ['pending', 'verified', 'rejected'], default: 'pending' },
+        remarks: { type: String, default: '' },
+      }, { _id: false }),
+      default: {},
+    },
 
     status: {
       type: String,

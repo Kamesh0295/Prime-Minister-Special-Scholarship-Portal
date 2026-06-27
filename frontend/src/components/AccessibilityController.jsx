@@ -20,10 +20,9 @@ const AccessibilityController = () => {
   // Update contrast class
   useEffect(() => {
     if (highContrast) {
-      document.documentElement.classList.add('dark', 'high-contrast');
+      document.documentElement.classList.add('high-contrast');
     } else {
       document.documentElement.classList.remove('high-contrast');
-      // Only keep 'dark' if dark mode is configured, but let high-contrast override
     }
     localStorage.setItem('pmss_contrast', highContrast);
   }, [highContrast]);
@@ -116,11 +115,11 @@ const AccessibilityController = () => {
   };
 
   return (
-    <div className="flex items-center gap-3 bg-slate-100 dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm transition-all text-xs">
+    <div className="flex items-center gap-3 bg-slate-100 p-2 rounded-lg border border-slate-200 shadow-sm transition-all text-xs">
       {/* Contrast Toggle */}
       <button
         onClick={toggleContrast}
-        className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 flex items-center gap-1.5 transition-colors"
+        className="p-1.5 rounded hover:bg-slate-200 text-slate-700 flex items-center gap-1.5 transition-colors"
         title={t('highContrast')}
         aria-label={t('highContrast')}
       >
@@ -129,16 +128,16 @@ const AccessibilityController = () => {
       </button>
 
       {/* Font Size Adjusters */}
-      <div className="h-4 w-px bg-slate-300 dark:bg-slate-600" />
+      <div className="h-4 w-px bg-slate-300" />
       
       <div className="flex items-center gap-1">
-        <span className="text-slate-500 dark:text-slate-400 mr-1">{t('textSize')}:</span>
+        <span className="text-slate-500 mr-1">{t('textSize')}:</span>
         <button
           onClick={() => adjustFont('md')}
           className={`px-2 py-0.5 rounded font-bold transition-all ${
             fontSize === 'md'
               ? 'bg-primary text-white scale-105'
-              : 'hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200'
+              : 'hover:bg-slate-200 text-slate-700'
           }`}
           title="Normal Font Size"
         >
@@ -149,7 +148,7 @@ const AccessibilityController = () => {
           className={`px-2 py-0.5 rounded font-bold text-sm transition-all ${
             fontSize === 'lg'
               ? 'bg-primary text-white scale-105'
-              : 'hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200'
+              : 'hover:bg-slate-200 text-slate-700'
           }`}
           title="Large Font Size"
         >
@@ -160,7 +159,7 @@ const AccessibilityController = () => {
           className={`px-2 py-0.5 rounded font-bold text-base transition-all ${
             fontSize === 'xl'
               ? 'bg-primary text-white scale-105'
-              : 'hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200'
+              : 'hover:bg-slate-200 text-slate-700'
           }`}
           title="Extra Large Font Size"
         >
@@ -171,14 +170,14 @@ const AccessibilityController = () => {
       {/* Voice Recognition Control */}
       {voiceSupported && (
         <>
-          <div className="h-4 w-px bg-slate-300 dark:bg-slate-600" />
+          <div className="h-4 w-px bg-slate-300" />
           <div className="relative">
             <button
               onClick={startVoiceCommands}
               className={`p-1.5 rounded flex items-center gap-1.5 transition-all ${
                 listening
                   ? 'bg-red-500 text-white animate-pulse'
-                  : 'hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200'
+                  : 'hover:bg-slate-200 text-slate-700'
               }`}
               title="Voice Commands Control"
               aria-label="Start Voice Navigation"
@@ -196,21 +195,21 @@ const AccessibilityController = () => {
           </button>
           
           {showHelper && (
-            <div className="absolute top-12 right-6 z-50 w-64 p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl text-slate-800 dark:text-slate-100">
+            <div className="absolute top-12 right-6 z-50 w-64 p-3 bg-white border border-slate-200 rounded-lg shadow-xl text-slate-800">
               <h4 className="font-bold text-sm mb-1.5 border-b pb-1">Available Voice Commands:</h4>
-              <ul className="space-y-1 text-[11px] list-disc list-inside text-slate-600 dark:text-slate-300">
-                <li><span className="font-semibold text-slate-800 dark:text-white">"Go to Dashboard"</span> - Open Dashboard</li>
-                <li><span className="font-semibold text-slate-800 dark:text-white">"Open Application"</span> - Apply for Scholarship</li>
-                <li><span className="font-semibold text-slate-800 dark:text-white">"Open Status"</span> - Check scholarship timeline</li>
-                <li><span className="font-semibold text-slate-800 dark:text-white">"Toggle Contrast"</span> - Switch high contrast mode</li>
-                <li><span className="font-semibold text-slate-800 dark:text-white">"Larger Text"</span> - Increase text scaling</li>
-                <li><span className="font-semibold text-slate-800 dark:text-white">"Reset Font"</span> - Default text scaling</li>
-                <li><span className="font-semibold text-slate-800 dark:text-white">"Transparency Portal"</span> - Public portal stats</li>
-                <li><span className="font-semibold text-slate-800 dark:text-white">"Sign Out"</span> - Logout from PMSS</li>
+              <ul className="space-y-1 text-[11px] list-disc list-inside text-slate-600">
+                <li><span className="font-semibold text-slate-800">"Go to Dashboard"</span> - Open Dashboard</li>
+                <li><span className="font-semibold text-slate-800">"Open Application"</span> - Apply for Scholarship</li>
+                <li><span className="font-semibold text-slate-800">"Open Status"</span> - Check scholarship timeline</li>
+                <li><span className="font-semibold text-slate-800">"Toggle Contrast"</span> - Switch high contrast mode</li>
+                <li><span className="font-semibold text-slate-800">"Larger Text"</span> - Increase text scaling</li>
+                <li><span className="font-semibold text-slate-800">"Reset Font"</span> - Default text scaling</li>
+                <li><span className="font-semibold text-slate-800">"Transparency Portal"</span> - Public portal stats</li>
+                <li><span className="font-semibold text-slate-800">"Sign Out"</span> - Logout from PMSS</li>
               </ul>
               <button 
                 onClick={() => setShowHelper(false)}
-                className="mt-2.5 w-full text-center py-1 bg-slate-100 dark:bg-slate-700 rounded hover:bg-slate-200 text-[10px] font-semibold"
+                className="mt-2.5 w-full text-center py-1 bg-slate-100 rounded hover:bg-slate-200 text-[10px] font-semibold"
               >
                 Close
               </button>

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Upload, FileText, X, CheckCircle, AlertCircle, Image } from 'lucide-react';
 
 const DocumentUploadCard = ({
@@ -8,12 +8,19 @@ const DocumentUploadCard = ({
   hint = 'PDF only, max 2MB',
   value,          // existing URL
   onChange,       // (fieldName, file) => void
+  readOnly = false,
+  status = '',
+  remarks = '',
 }) => {
   const [dragging, setDragging] = useState(false);
   const [preview, setPreview] = useState(null);
   const [error, setError] = useState('');
   const [uploaded, setUploaded] = useState(!!value);
   const inputRef = useRef();
+
+  useEffect(() => {
+    setUploaded(!!value);
+  }, [value]);
 
   const isPhotoField = fieldName === 'photo';
 
@@ -76,22 +83,50 @@ const DocumentUploadCard = ({
       {uploaded && !error ? (
         <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-xl">
           <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
-          {isPhotoField && preview ? (
-            <img src={preview} alt="preview" className="h-10 w-10 rounded-lg object-cover" />
+          {isPhotoField && (preview || value) ? (
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+              <img
+                src={preview || (value?.startsWith('data:') || value?.startsWith('http') ? value : `http://localhost:5000${value}`)}
+                alt="preview"
+                className="h-10 w-10 rounded-lg object-cover border border-green-200"
+              />
+              {value && (
+                <a
+                  href={value?.startsWith('http') ? value : `http://localhost:5000${value}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-primary hover:underline font-bold truncate"
+                >
+                  View Photo
+                </a>
+              )}
+            </div>
           ) : (
             <div className="flex items-center gap-2 flex-1 min-w-0">
               <FileText className="h-4 w-4 text-green-600 flex-shrink-0" />
               <span className="text-sm text-green-700 truncate">{preview || 'File uploaded'}</span>
+              {value && (
+                <a
+                  href={value?.startsWith('http') ? value : `http://localhost:5000${value}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-primary hover:underline font-bold ml-2 shrink-0"
+                >
+                  (View Document)
+                </a>
+              )}
             </div>
           )}
-          <button
-            type="button"
-            onClick={handleRemove}
-            className="text-gray-400 hover:text-red-500 transition-colors ml-auto flex-shrink-0"
-            aria-label="Remove file"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={handleRemove}
+              className="text-gray-400 hover:text-red-500 transition-colors ml-auto flex-shrink-0"
+              aria-label="Remove file"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
       ) : (
         <div
@@ -134,6 +169,27 @@ const DocumentUploadCard = ({
         <p className="text-xs text-gray-400">
           Current: <a href={`http://localhost:5000${value}`} target="_blank" rel="noreferrer" className="text-primary underline">View uploaded file</a>
         </p>
+      )}
+
+      {/* Verification Status Badge */}
+      {status && (
+        <div className="flex flex-col gap-1.5 mt-1.5">
+          <div className="flex items-center gap-1.5">
+            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+              status === 'verified' ? 'bg-green-50 text-green-700 border-green-200' :
+              status === 'rejected' ? 'bg-red-50 text-red-700 border-red-200' :
+              'bg-amber-50 text-amber-700 border-amber-200'
+            }`}>
+              {status === 'verified' ? '✓ Verified' : status === 'rejected' ? '✗ Rejected' : '⧗ Pending Verify'}
+            </span>
+          </div>
+          {status === 'rejected' && remarks && (
+            <div className="text-[10px] text-red-700 bg-red-50 border border-red-100 p-2.5 rounded-xl font-medium leading-relaxed">
+              <span className="font-extrabold block text-[9px] uppercase tracking-wider text-red-500 mb-0.5">Rejection Remarks:</span>
+              {remarks}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

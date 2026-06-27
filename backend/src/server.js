@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config({ override: true });
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -16,6 +16,8 @@ const notificationsRoutes = require('./routes/notifications');
 const institutionRoutes = require('./routes/institution');
 const aiRoutes = require('./routes/ai');
 const publicRoutes = require('./routes/public');
+const analyticsRoutes = require('./routes/analytics');
+const chatbotRoutes = require('./routes/chatbot');
 
 const app = express();
 
@@ -57,6 +59,8 @@ app.use('/api/notifications', notificationsRoutes);
 app.use('/api/institution', institutionRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/public', publicRoutes);
+app.use('/api/admin/analytics', analyticsRoutes);
+app.use('/api/ai/chatbot', chatbotRoutes);
 
 // Health check
 app.get('/', (req, res) => {
@@ -108,11 +112,62 @@ const seedAdmin = async () => {
   }
 };
 
+// Seed default FAQ knowledge base
+const seedFaqs = async () => {
+  try {
+    const FAQ = require('./models/FAQ');
+    const count = await FAQ.countDocuments();
+    if (count === 0) {
+      console.log('Seeding default chatbot FAQs...');
+      const defaultFaqs = [
+        {
+          question: 'Am I eligible for this scholarship?',
+          answer: 'To be eligible for PMSSS, you must be a resident of Jammu & Kashmir or Ladakh, have passed Class 12 or equivalent, and have a family income under ₹8,00,000 per annum. Standard General, Engineering, and Medical degree courses are supported.',
+          category: 'eligibility'
+        },
+        {
+          question: 'What documents are required?',
+          answer: 'The required documents are:\n1. Aadhaar Card\n2. Domicile/State Residence Certificate\n3. Income Certificate\n4. Caste/Community Certificate\n5. Class 12 Marksheet\n6. Bank Passbook\n7. Bonafide College Certificate.',
+          category: 'documents'
+        },
+        {
+          question: 'How do I apply?',
+          answer: 'First, navigate to "My Profile" and complete all details to at least 80%. Then, go to "Application", verify your pre-filled details, upload any additional files, and click "Submit Application".',
+          category: 'process'
+        },
+        {
+          question: 'When is the deadline?',
+          answer: 'Scholarship deadlines are set by the Ministry of Education, Government of India. Please monitor the homepage announcements and dashboard notifications for the current registration deadlines.',
+          category: 'deadlines'
+        },
+        {
+          question: 'Why was my application rejected?',
+          answer: 'Common reasons for rejection include: blurred or illegible documents, mismatched names between Aadhaar and academic marksheets, or incorrect bank details. Please check the remarks left by the reviewer, correct the details in your profile, and re-submit.',
+          category: 'general'
+        },
+        {
+          question: 'How can I update my profile?',
+          answer: 'You can update your profile by navigating to the "My Profile" page. Fill in the required fields under the respective tabs, upload any updated documents, and click "Save Profile Changes" at the bottom.',
+          category: 'general'
+        }
+      ];
+      await FAQ.insertMany(defaultFaqs);
+      console.log('✅ FAQ Knowledge Base seeded successfully.');
+    }
+  } catch (error) {
+    console.error('Failed to seed FAQs:', error.message);
+  }
+};
+
 // Start server
 const PORT = process.env.PORT || 5000;
 connectDB().then(async () => {
   await seedAdmin();
+  await seedFaqs();
   app.listen(PORT, () => {
     console.log(`🚀 PMSS Backend running on http://localhost:${PORT}`);
   });
 });
+
+// Assistant verified write access
+
