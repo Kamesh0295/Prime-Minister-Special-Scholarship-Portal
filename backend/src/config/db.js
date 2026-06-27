@@ -4,11 +4,14 @@ const fs = require('fs');
 const bcrypt = require('bcryptjs');
 const dns = require('dns');
 
-// Configure custom public DNS servers to resolve MongoDB Atlas SRV records
-try {
-  dns.setServers(['1.1.1.1', '8.8.8.8']);
-} catch (dnsErr) {
-  console.warn('Failed to set custom DNS servers, using system default:', dnsErr.message);
+// Configure custom DNS servers only when explicitly enabled.
+// Some deployment environments resolve Atlas SRV records more reliably with their own DNS.
+if (process.env.USE_CUSTOM_DNS === 'true') {
+  try {
+    dns.setServers(['1.1.1.1', '8.8.8.8']);
+  } catch (dnsErr) {
+    console.warn('Failed to set custom DNS servers, using system default:', dnsErr.message);
+  }
 }
 
 const sanitizeMongoUri = (uri) => {
@@ -58,7 +61,10 @@ const connectDB = async () => {
     }
 
     const sanitizedUri = sanitizeMongoUri(mongoUri);
-    const conn = await mongoose.connect(sanitizedUri);
+    const conn = await mongoose.connect(sanitizedUri, {
+      serverSelectionTimeoutMS: 30000,
+      connectTimeoutMS: 30000,
+    });
     console.log('✓ Connected to MongoDB Atlas');
 
     // Ensure all existing models are registered
@@ -308,7 +314,9 @@ const connectDB = async () => {
 
     return conn;
   } catch (error) {
-    console.error(`MongoDB Connection Error: ${error.message}`);
+    console.error('MongoDB Connection Error:', error.message);
+    console.error('If this is MongoDB Atlas, check Network Access / IP whitelist and confirm the Render service can reach the cluster.');
+    console.error('Also verify the connection string, username, password, and database name in the deployment environment.');
     process.exit(1);
   }
 };
