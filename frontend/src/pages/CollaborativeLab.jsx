@@ -5,6 +5,7 @@ import io from 'socket.io-client';
 import * as THREE from 'three';
 import * as d3 from 'd3';
 import API from '../services/api';
+import { BACKEND_ORIGIN } from '../services/apiBase';
 import { Play, Pause, RotateCcw, Send, MessageSquare, Users, ShieldAlert, ArrowLeft, Terminal } from 'lucide-react';
 
 const CollaborativeLab = () => {
@@ -93,7 +94,7 @@ const CollaborativeLab = () => {
     if (loading || error || !experiment) return;
 
     // Connect socket
-    const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+    const socketUrl = BACKEND_ORIGIN;
     const socket = io(socketUrl, {
       transports: ['websocket'],
       upgrade: false,

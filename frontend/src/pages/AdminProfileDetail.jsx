@@ -4,6 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import DashboardLayout from '../components/layout/DashboardLayout';
 import { getProfileById, verifyProfile, deleteProfileAdmin } from '../services/adminService';
 import { showError, showSuccess } from '../store/slices/toastSlice';
+import { BACKEND_ORIGIN } from '../services/apiBase';
 import {
   User,
   MapPin,
@@ -132,7 +133,7 @@ const AdminProfileDetail = () => {
           <div className="flex items-center gap-4">
             {profile.profilePhoto ? (
               <img
-                src={`http://localhost:5000${profile.profilePhoto}`}
+                src={`${BACKEND_ORIGIN}${profile.profilePhoto}`}
                 alt=""
                 className="h-16 w-16 rounded-full object-cover border border-gray-100"
               />
@@ -358,7 +359,7 @@ const AdminProfileDetail = () => {
                 </div>
                 {val ? (
                   <a
-                    href={`http://localhost:5000${val}`} target="_blank" rel="noreferrer"
+                    href={`${BACKEND_ORIGIN}${val}`} target="_blank" rel="noreferrer"
                     className="text-xs font-bold text-primary hover:underline shrink-0"
                   >
                     View Document →

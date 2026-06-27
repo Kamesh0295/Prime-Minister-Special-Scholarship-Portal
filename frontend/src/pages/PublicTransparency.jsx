@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { BarChart3, Users, CheckCircle2, Landmark, Search, ArrowRight, ShieldCheck, Globe } from 'lucide-react';
+import { API_BASE_URL } from '../services/apiBase';
 
 const PublicTransparency = () => {
   const navigate = useNavigate();
@@ -13,7 +14,7 @@ const PublicTransparency = () => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const res = await axios.get('http://localhost:5000/api/public/transparency');
+        const res = await axios.get(`${API_BASE_URL}/public/transparency`);
         if (res.data.success) {
           setStats(res.data.data);
         }

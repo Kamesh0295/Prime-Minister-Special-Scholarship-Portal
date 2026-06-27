@@ -5,6 +5,7 @@ import axios from 'axios';
 import { Search, CheckCircle, AlertTriangle, FileText, ExternalLink, ShieldCheck, LogOut, CheckSquare, RefreshCw, UserCheck } from 'lucide-react';
 import { logout } from '../store/slices/authSlice';
 import StatusBadge from '../components/ui/StatusBadge';
+import { API_BASE_URL, BACKEND_ORIGIN } from '../services/apiBase';
 
 const InstitutionDashboard = () => {
   const dispatch = useDispatch();
@@ -26,7 +27,7 @@ const InstitutionDashboard = () => {
   const fetchApps = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`http://localhost:5000/api/institution/applications?search=${search}`, {
+      const res = await axios.get(`${API_BASE_URL}/institution/applications?search=${search}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.data.success) {
@@ -65,7 +66,7 @@ const InstitutionDashboard = () => {
     try {
       setActionLoading(true);
       const res = await axios.patch(
-        `http://localhost:5000/api/institution/applications/${selectedApp._id}/verify`,
+        `${API_BASE_URL}/institution/applications/${selectedApp._id}/verify`,
         { remarks },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -91,7 +92,7 @@ const InstitutionDashboard = () => {
     try {
       setActionLoading(true);
       const res = await axios.patch(
-        `http://localhost:5000/api/institution/applications/${selectedApp._id}/reject`,
+        `${API_BASE_URL}/institution/applications/${selectedApp._id}/reject`,
         { remarks },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -228,7 +229,7 @@ const InstitutionDashboard = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {selectedApp.documents?.bonafide ? (
                     <a
-                      href={`http://localhost:5000${selectedApp.documents.bonafide}`}
+                        href={`${BACKEND_ORIGIN}${selectedApp.documents.bonafide}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="p-3 border rounded-xl hover:bg-slate-50 border-blue-200 bg-blue-50/20 flex items-center justify-between text-xs text-blue-700 font-bold"
@@ -248,7 +249,7 @@ const InstitutionDashboard = () => {
 
                   {selectedApp.documents?.marksheet && (
                     <a
-                      href={`http://localhost:5000${selectedApp.documents.marksheet}`}
+                        href={`${BACKEND_ORIGIN}${selectedApp.documents.marksheet}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="p-3 border rounded-xl hover:bg-slate-50 flex items-center justify-between text-xs text-slate-700 font-semibold"
@@ -263,7 +264,7 @@ const InstitutionDashboard = () => {
 
                   {selectedApp.documents?.aadhaar && (
                     <a
-                      href={`http://localhost:5000${selectedApp.documents.aadhaar}`}
+                        href={`${BACKEND_ORIGIN}${selectedApp.documents.aadhaar}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="p-3 border rounded-xl hover:bg-slate-50 flex items-center justify-between text-xs text-slate-700 font-semibold"
@@ -278,7 +279,7 @@ const InstitutionDashboard = () => {
 
                   {selectedApp.documents?.incomeCertificate && (
                     <a
-                      href={`http://localhost:5000${selectedApp.documents.incomeCertificate}`}
+                        href={`${BACKEND_ORIGIN}${selectedApp.documents.incomeCertificate}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="p-3 border rounded-xl hover:bg-slate-50 flex items-center justify-between text-xs text-slate-700 font-semibold"

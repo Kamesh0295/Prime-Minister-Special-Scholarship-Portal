@@ -10,6 +10,7 @@ import { applicationSuccess } from '../store/slices/applicationSlice';
 import { profileSuccess } from '../store/slices/profileSlice';
 import { getApplication, createApplication, updateApplication, getProfile } from '../services/studentService';
 import { uploadDocuments } from '../services/documentService';
+import { API_BASE_URL } from '../services/apiBase';
 import { ChevronRight, ChevronLeft, Save, Send, Eye, Loader2, Sparkles, CheckCircle2, XCircle, Info, Landmark, Lock, User } from 'lucide-react';
 import { useTranslation } from '../context/LanguageContext';
 
@@ -181,7 +182,7 @@ const ScholarshipApplicationForm = () => {
     dispatch(showInfo(`Scanning ${docType} via AI OCR...`));
     try {
       const res = await axios.post(
-        'http://localhost:5000/api/ai/ocr',
+        `${API_BASE_URL}/ai/ocr`,
         { documentType: docType },
         { headers: { Authorization: `Bearer ${token}` } }
       );

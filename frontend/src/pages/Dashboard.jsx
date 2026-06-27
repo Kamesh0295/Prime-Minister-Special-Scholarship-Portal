@@ -8,6 +8,7 @@ import { SkeletonCard } from '../components/ui/SkeletonLoader';
 import { showError, showSuccess, showInfo } from '../store/slices/toastSlice';
 import { applicationSuccess } from '../store/slices/applicationSlice';
 import { getApplication, getProfile } from '../services/studentService';
+import { API_BASE_URL } from '../services/apiBase';
 import { useTranslation } from '../context/LanguageContext';
 import {
   FileText,
@@ -74,7 +75,7 @@ const Dashboard = () => {
 
   const fetchNotifications = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/notifications', {
+      const res = await axios.get(`${API_BASE_URL}/notifications`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.data.success) {
@@ -89,7 +90,7 @@ const Dashboard = () => {
   const fetchRecommendations = async () => {
     try {
       setRecsLoading(true);
-      const res = await axios.get('http://localhost:5000/api/ai/recommendations', {
+      const res = await axios.get(`${API_BASE_URL}/ai/recommendations`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.data.success) {
@@ -124,7 +125,7 @@ const Dashboard = () => {
 
   const handleMarkAllRead = async () => {
     try {
-      await axios.patch('http://localhost:5000/api/notifications/read-all', {}, {
+      await axios.patch(`${API_BASE_URL}/notifications/read-all`, {}, {
         headers: { Authorization: `Bearer ${token}` },
       });
       fetchNotifications();
@@ -138,7 +139,7 @@ const Dashboard = () => {
     if (!application?._id) return;
     try {
       setDownloading(true);
-      const res = await axios.get(`http://localhost:5000/api/admin/applications/${application._id}/letter`, {
+      const res = await axios.get(`${API_BASE_URL}/admin/applications/${application._id}/letter`, {
         headers: { Authorization: `Bearer ${token}` },
         responseType: 'blob',
       });

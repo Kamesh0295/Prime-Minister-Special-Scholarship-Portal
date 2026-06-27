@@ -4,6 +4,16 @@ const User = require('../models/User');
 
 const router = express.Router();
 
+// @route   GET /api/public
+// @desc    Public API landing endpoint
+router.get('/', async (req, res) => {
+  return res.json({
+    success: true,
+    message: 'Public API is running.',
+    endpoints: ['/api/public/transparency', '/api/public/verify/:id'],
+  });
+});
+
 // @route   GET /api/public/transparency
 // @desc    Get aggregated statistical metrics for the public portal
 router.get('/transparency', async (req, res) => {

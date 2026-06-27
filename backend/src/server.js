@@ -21,6 +21,13 @@ const chatbotRoutes = require('./routes/chatbot');
 
 const app = express();
 
+const requiredEnvKeys = ['PORT', 'MONGO_URI', 'JWT_SECRET', 'JWT_REFRESH_SECRET', 'FRONTEND_URL', 'GEMINI_API_KEY'];
+for (const key of requiredEnvKeys) {
+  if (!process.env[key]) {
+    console.warn(`Warning: ${key} is missing`);
+  }
+}
+
 const getAllowedOrigins = () => {
   const configuredOrigins = [process.env.FRONTEND_URL, process.env.CORS_ORIGINS, process.env.CORS_ORIGIN]
     .filter(Boolean)
@@ -34,39 +41,40 @@ const getAllowedOrigins = () => {
   ])];
 };
 
-// Middleware
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (mobile apps, Postman), any localhost port in dev,
-      // and configured production frontend origins.
-      const allowedOrigins = getAllowedOrigins();
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, Postman), any localhost port in dev,
+    // and configured production frontend origins.
+    const allowedOrigins = getAllowedOrigins();
 
-      if (!origin) {
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+
+    try {
+      const parsedOrigin = new URL(origin);
+      const isLocalhost = parsedOrigin.hostname === 'localhost' || parsedOrigin.hostname === '127.0.0.1';
+      if (allowedOrigins.includes(origin) || isLocalhost) {
         callback(null, true);
         return;
       }
+    } catch (error) {
+      // Fall through to the explicit rejection below.
+    }
 
-      try {
-        const parsedOrigin = new URL(origin);
-        const isLocalhost = parsedOrigin.hostname === 'localhost' || parsedOrigin.hostname === '127.0.0.1';
-        if (allowedOrigins.includes(origin) || isLocalhost) {
-          callback(null, true);
-          return;
-        }
-      } catch (error) {
-        // Fall through to the explicit rejection below.
-      }
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS policy blocked: ${origin}`));
+    }
+  },
+  credentials: true,
+};
 
-      if (allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error(`CORS policy blocked: ${origin}`));
-      }
-    },
-    credentials: true,
-  })
-);
+// Middleware
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -88,9 +96,12 @@ app.use('/api/ai/chatbot', chatbotRoutes);
 
 // Health check
 app.get('/', (req, res) => {
+  const databaseState = require('mongoose').connection?.readyState === 1 ? 'connected' : 'disconnected';
   res.json({
     success: true,
-    message: 'PMSS – Prime Minister Special Scholarship Management System API is running.',
+    status: 'running',
+    database: databaseState,
+    environment: process.env.NODE_ENV || 'unknown',
     version: '1.0.0',
   });
 });

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import { ShieldCheck, ShieldAlert, FileText, CheckCircle2, ChevronLeft, Calendar, User, Landmark, BookOpen } from 'lucide-react';
+import { API_BASE_URL } from '../services/apiBase';
 
 const PublicVerification = () => {
   const { id } = useParams();
@@ -13,7 +14,7 @@ const PublicVerification = () => {
   useEffect(() => {
     const verifyLetter = async () => {
       try {
-        const res = await axios.get(`http://localhost:5000/api/public/verify/${id}`);
+        const res = await axios.get(`${API_BASE_URL}/public/verify/${id}`);
         setData(res.data.data);
         setVerified(res.data.verified);
       } catch (err) {

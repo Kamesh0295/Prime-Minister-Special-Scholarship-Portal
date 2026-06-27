@@ -8,6 +8,7 @@ import Modal from '../components/ui/Modal';
 import { SkeletonCard } from '../components/ui/SkeletonLoader';
 import { showSuccess, showError } from '../store/slices/toastSlice';
 import { getApplicationById, updateApplicationStatus, downloadLetterAdmin, updateDocumentStatus } from '../services/adminService';
+import { BACKEND_ORIGIN } from '../services/apiBase';
 import { generateApplicationPDF } from '../utils/pdfGenerator';
 import {
   ArrowLeft, CheckCircle, XCircle, MessageSquare, Download,
@@ -329,7 +330,7 @@ const AdminApplicationDetail = () => {
 
                           <div className="flex items-center gap-2">
                             <a
-                              href={`http://localhost:5000${url}`}
+                              href={`${BACKEND_ORIGIN}${url}`}
                               target="_blank"
                               rel="noreferrer"
                               className="px-3 py-1.5 border border-slate-200 text-slate-600 hover:bg-slate-50 font-bold text-[10px] rounded-lg transition flex items-center gap-1"

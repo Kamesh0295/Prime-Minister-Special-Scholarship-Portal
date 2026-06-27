@@ -7,6 +7,7 @@ import { getProfile, updateProfile, requestProfileDeletion } from '../services/s
 import { uploadDocuments } from '../services/documentService';
 import { profileStart, profileSuccess, profileFailure } from '../store/slices/profileSlice';
 import { showSuccess, showError, showInfo } from '../store/slices/toastSlice';
+import { BACKEND_ORIGIN } from '../services/apiBase';
 import {
   User,
   MapPin,
@@ -313,7 +314,7 @@ const MyProfile = () => {
             <div className="relative">
               {profileData.profilePhoto ? (
                 <img
-                  src={`http://localhost:5000${profileData.profilePhoto}`}
+                  src={`${BACKEND_ORIGIN}${profileData.profilePhoto}`}
                   alt="Avatar"
                   className="h-16 w-16 rounded-full object-cover border-2 border-primary/20"
                 />

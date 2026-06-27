@@ -5,6 +5,7 @@ import DashboardLayout from '../components/layout/DashboardLayout';
 import { SkeletonTable } from '../components/ui/SkeletonLoader';
 import { showError } from '../store/slices/toastSlice';
 import { getAllProfiles } from '../services/adminService';
+import { BACKEND_ORIGIN } from '../services/apiBase';
 import { Search, Eye, AlertTriangle, CheckCircle, XCircle, Clock, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
 
 const AdminProfilesList = () => {
@@ -136,7 +137,7 @@ const AdminProfilesList = () => {
                         <div className="flex items-center gap-3">
                           {profile.profilePhoto ? (
                             <img
-                              src={`http://localhost:5000${profile.profilePhoto}`}
+                              src={`${BACKEND_ORIGIN}${profile.profilePhoto}`}
                               alt=""
                               className="h-9 w-9 rounded-full object-cover border border-gray-200 flex-shrink-0"
                             />

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Upload, FileText, X, CheckCircle, AlertCircle, Image } from 'lucide-react';
+import { BACKEND_ORIGIN } from '../../services/apiBase';
 
 const DocumentUploadCard = ({
   label,
@@ -86,13 +87,13 @@ const DocumentUploadCard = ({
           {isPhotoField && (preview || value) ? (
             <div className="flex items-center gap-3 flex-1 min-w-0">
               <img
-                src={preview || (value?.startsWith('data:') || value?.startsWith('http') ? value : `http://localhost:5000${value}`)}
+                src={preview || (value?.startsWith('data:') || value?.startsWith('http') ? value : `${BACKEND_ORIGIN}${value}`)}
                 alt="preview"
                 className="h-10 w-10 rounded-lg object-cover border border-green-200"
               />
               {value && (
                 <a
-                  href={value?.startsWith('http') ? value : `http://localhost:5000${value}`}
+                  href={value?.startsWith('http') ? value : `${BACKEND_ORIGIN}${value}`}
                   target="_blank"
                   rel="noreferrer"
                   className="text-xs text-primary hover:underline font-bold truncate"
@@ -107,7 +108,7 @@ const DocumentUploadCard = ({
               <span className="text-sm text-green-700 truncate">{preview || 'File uploaded'}</span>
               {value && (
                 <a
-                  href={value?.startsWith('http') ? value : `http://localhost:5000${value}`}
+                  href={value?.startsWith('http') ? value : `${BACKEND_ORIGIN}${value}`}
                   target="_blank"
                   rel="noreferrer"
                   className="text-xs text-primary hover:underline font-bold ml-2 shrink-0"
@@ -167,7 +168,7 @@ const DocumentUploadCard = ({
 
       {!uploaded && value && (
         <p className="text-xs text-gray-400">
-          Current: <a href={`http://localhost:5000${value}`} target="_blank" rel="noreferrer" className="text-primary underline">View uploaded file</a>
+          Current: <a href={`${BACKEND_ORIGIN}${value}`} target="_blank" rel="noreferrer" className="text-primary underline">View uploaded file</a>
         </p>
       )}
 
